@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput, Alert,
-  PermissionsAndroid, Platform,
+  PermissionsAndroid, Platform, StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 import api from '../services/api';
 
 const KEYPAD = [
-  ['1', '2', '3'],
-  ['4', '5', '6'],
-  ['7', '8', '9'],
-  ['*', '0', '#'],
+  [{ key: '1', sub: '' }, { key: '2', sub: 'ABC' }, { key: '3', sub: 'DEF' }],
+  [{ key: '4', sub: 'GHI' }, { key: '5', sub: 'JKL' }, { key: '6', sub: 'MNO' }],
+  [{ key: '7', sub: 'PQRS' }, { key: '8', sub: 'TUV' }, { key: '9', sub: 'WXYZ' }],
+  [{ key: '*', sub: '' }, { key: '0', sub: '+' }, { key: '#', sub: '' }],
 ];
 
 export default function DialerScreen() {
@@ -103,10 +104,13 @@ export default function DialerScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Status */}
-      <View style={styles.statusBar}>
+      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      
+      {/* Header */}
+      <View style={styles.header}>
         <Text style={styles.agentName}>{user?.full_name}</Text>
         <View style={[styles.statusBadge, callState !== 'idle' && styles.statusBusy]}>
+          <View style={styles.statusDot} />
           <Text style={styles.statusText}>
             {callState === 'idle' ? 'Available' : 'On Call'}
           </Text>
@@ -119,13 +123,14 @@ export default function DialerScreen() {
           style={styles.numberText}
           value={number}
           onChangeText={setNumber}
-          placeholder="Enter number"
-          placeholderTextColor="#64748b"
+          placeholder="Enter phone number"
+          placeholderTextColor="#666"
           keyboardType="phone-pad"
+          selectionColor="#4CAF50"
         />
         {number.length > 0 && (
           <TouchableOpacity onPress={handleBackspace} style={styles.backspace}>
-            <Text style={styles.backspaceText}>⌫</Text>
+            <MaterialIcons name="backspace" size={28} color="#fff" />
           </TouchableOpacity>
         )}
       </View>
@@ -134,13 +139,15 @@ export default function DialerScreen() {
       <View style={styles.keypad}>
         {KEYPAD.map((row, i) => (
           <View key={i} style={styles.keypadRow}>
-            {row.map((key) => (
+            {row.map((item) => (
               <TouchableOpacity
-                key={key}
+                key={item.key}
                 style={styles.keypadButton}
-                onPress={() => handleKeyPress(key)}
+                onPress={() => handleKeyPress(item.key)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.keypadText}>{key}</Text>
+                <Text style={styles.keypadText}>{item.key}</Text>
+                {item.sub ? <Text style={styles.keypadSubText}>{item.sub}</Text> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -148,38 +155,50 @@ export default function DialerScreen() {
       </View>
 
       {/* Call Button */}
-      <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-        <Text style={styles.callButtonText}>📞 Call</Text>
+      <TouchableOpacity 
+        style={[styles.callButton, !number && styles.callButtonDisabled]} 
+        onPress={handleCall}
+        disabled={!number}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="call" size={32} color="#fff" />
       </TouchableOpacity>
 
       {/* Recent Calls */}
       {recentCalls.length > 0 && (
         <View style={styles.recentSection}>
-          <Text style={styles.recentTitle}>Recent</Text>
+          <Text style={styles.recentTitle}>RECENT</Text>
           <FlatList
             data={recentCalls}
             keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.recentItem}
-                onPress={() => {
-                  const redialNumber = item.direction === 'outbound' ? item.to_number : item.from_number;
-                  setNumber(redialNumber || '');
-                }}
-              >
-                <Text style={styles.recentIcon}>
-                  {item.direction === 'outbound' ? '↗️' : '↙️'}
-                </Text>
-                <View style={styles.recentInfo}>
-                  <Text style={styles.recentNumber}>
-                    {item.direction === 'outbound' ? item.to_number : item.from_number}
-                  </Text>
-                  <Text style={styles.recentMeta}>
-                    {formatDuration(item.duration_sec)} · {item.status}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              const isOutbound = item.direction === 'outbound';
+              const displayNumber = isOutbound ? item.to_number : item.from_number;
+              return (
+                <TouchableOpacity
+                  style={styles.recentItem}
+                  onPress={() => setNumber(displayNumber || '')}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.recentIcon}>
+                    <MaterialIcons 
+                      name={isOutbound ? 'call-made' : (item.status === 'no-answer' ? 'call-missed' : 'call-received')} 
+                      size={20} 
+                      color={isOutbound ? '#4CAF50' : (item.status === 'no-answer' ? '#f44336' : '#2196F3')} 
+                    />
+                  </View>
+                  <View style={styles.recentInfo}>
+                    <Text style={styles.recentNumber}>{displayNumber || 'Unknown'}</Text>
+                    <Text style={styles.recentMeta}>
+                      {formatDuration(item.duration_sec)} · {item.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCall} style={styles.recentCallBtn}>
+                    <Ionicons name="call" size={20} color="#4CAF50" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
       )}
@@ -190,15 +209,15 @@ export default function DialerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    backgroundColor: '#1a1a2e',
   },
-  statusBar: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   agentName: {
     color: '#fff',
@@ -206,13 +225,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusBadge: {
-    backgroundColor: '#22c55e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   statusBusy: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#f44336',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    marginRight: 6,
   },
   statusText: {
     color: '#fff',
@@ -220,81 +248,101 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   numberDisplay: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a3e',
   },
   numberText: {
     flex: 1,
     color: '#fff',
-    fontSize: 24,
-    fontWeight: '500',
+    fontSize: 32,
+    fontWeight: '300',
     letterSpacing: 2,
   },
   backspace: {
     padding: 8,
   },
-  backspaceText: {
-    color: '#94a3b8',
-    fontSize: 24,
-  },
   keypad: {
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   keypadRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-around',
+    marginBottom: 16,
   },
   keypadButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#1e293b',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2a2a3e',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   keypadText: {
     color: '#fff',
     fontSize: 28,
-    fontWeight: '500',
+    fontWeight: '400',
+  },
+  keypadSubText: {
+    color: '#888',
+    fontSize: 10,
+    marginTop: 2,
+    letterSpacing: 1,
   },
   callButton: {
-    backgroundColor: '#22c55e',
-    borderRadius: 16,
-    paddingVertical: 16,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    alignSelf: 'center',
+    marginTop: 24,
+    elevation: 4,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  callButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
+  callButtonDisabled: {
+    backgroundColor: '#444',
+    elevation: 0,
   },
   recentSection: {
     flex: 1,
+    marginTop: 24,
+    paddingHorizontal: 20,
   },
   recentTitle: {
-    color: '#94a3b8',
-    fontSize: 14,
+    color: '#888',
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
-    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#2a2a3e',
   },
   recentIcon: {
-    fontSize: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2a2a3e',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   recentInfo: {
@@ -303,10 +351,14 @@ const styles = StyleSheet.create({
   recentNumber: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '500',
   },
   recentMeta: {
-    color: '#64748b',
+    color: '#888',
     fontSize: 12,
     marginTop: 2,
+  },
+  recentCallBtn: {
+    padding: 8,
   },
 });

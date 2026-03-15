@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Vibration, StatusBar } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -30,9 +31,10 @@ export default function IncomingCallScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
       <View style={styles.callerInfo}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>📞</Text>
+          <Ionicons name="call" size={50} color="#22c55e" />
         </View>
         <Text style={styles.label}>Incoming Call</Text>
         <Text style={styles.callerNumber}>
@@ -42,12 +44,12 @@ export default function IncomingCallScreen() {
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.rejectButton} onPress={handleReject}>
-          <Text style={styles.actionIcon}>✕</Text>
+          <Ionicons name="close" size={32} color="#fff" />
           <Text style={styles.actionLabel}>Decline</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
-          <Text style={styles.actionIcon}>✓</Text>
+          <Ionicons name="checkmark" size={32} color="#fff" />
           <Text style={styles.actionLabel}>Accept</Text>
         </TouchableOpacity>
       </View>
@@ -58,7 +60,7 @@ export default function IncomingCallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1a1a2e',
     justifyContent: 'space-between',
     paddingVertical: 80,
   },
@@ -69,14 +71,12 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#2a2a3e',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
-  avatarText: {
-    fontSize: 40,
-  },
+
   label: {
     color: '#22c55e',
     fontSize: 16,
@@ -110,11 +110,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionIcon: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '700',
   },
   actionLabel: {
     color: '#fff',

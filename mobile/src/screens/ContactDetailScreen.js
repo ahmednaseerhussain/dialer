@@ -4,6 +4,7 @@ import {
   ScrollView, Alert, FlatList, PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -166,7 +167,8 @@ export default function ContactDetailScreen() {
 
         {!isNew && phone && (
           <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-            <Text style={styles.callButtonText}>📞 Call</Text>
+            <Ionicons name="call" size={18} color="#fff" />
+            <Text style={styles.callButtonText}>Call</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -177,9 +179,13 @@ export default function ContactDetailScreen() {
           <Text style={styles.historyTitle}>Call History</Text>
           {callHistory.map((c) => (
             <View key={c.id} style={styles.historyItem}>
-              <Text style={styles.historyIcon}>
-                {c.direction === 'outbound' ? '↗️' : '↙️'}
-              </Text>
+              <View style={styles.historyIcon}>
+                <MaterialIcons 
+                  name={c.direction === 'outbound' ? 'call-made' : 'call-received'} 
+                  size={18} 
+                  color={c.direction === 'outbound' ? '#22c55e' : '#3b82f6'} 
+                />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyDate}>
                   {new Date(c.created_at).toLocaleString()}
@@ -199,7 +205,7 @@ export default function ContactDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1a1a2e',
   },
   content: {
     padding: 20,
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   input: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#2a2a3e',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#2a2a3e',
   },
   statusChipActive: {
     backgroundColor: '#3b82f6',
@@ -275,6 +281,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   callButtonText: {
     color: '#fff',
@@ -299,7 +308,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1e293b',
   },
   historyIcon: {
-    fontSize: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2a2a3e',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   historyDate: {
