@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  TextInput, Alert, RefreshControl,
+  TextInput, Alert, RefreshControl, PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
@@ -59,6 +59,13 @@ export default function ContactsScreen() {
   }
 
   async function handleCall(phone) {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission Required', 'Microphone permission is needed to make calls.');
+        return;
+      }
+    }
     try {
       await makeCall(phone);
     } catch (err) {

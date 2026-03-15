@@ -12,6 +12,9 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
+// Trust proxy headers (Render.com, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // CORS — restrict to your app's origin in production
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',

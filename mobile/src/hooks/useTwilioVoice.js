@@ -42,15 +42,25 @@ export default function useTwilioVoice() {
     };
   }, []);
 
+  // register() requires Firebase Cloud Messaging (FCM) on Android.
+  // Without google-services.json configured, calling voice.register()
+  // will crash the app with "Default FirebaseApp is not initialized".
+  // Incoming call push notifications need FCM. Outbound calls work without it.
   const register = useCallback(async () => {
-    if (!Voice || !voiceRef.current) return;
+    if (!Voice || !voiceRef.current) {
+      console.warn('Twilio Voice SDK not available, skipping registration');
+      return null;
+    }
     try {
       const { data } = await api.get('/api/token');
+      // Only attempt registration if Firebase is configured.
+      // voice.register() is needed for incoming call push notifications.
+      // voice.connect() for outbound calls works without registration.
       await voiceRef.current.register(data.token);
       return data.token;
     } catch (err) {
-      console.error('Voice registration failed:', err);
-      throw err;
+      console.warn('Voice registration failed (Firebase may not be configured):', err?.message || err);
+      return null;
     }
   }, []);
 

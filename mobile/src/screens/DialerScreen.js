@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput, Alert,
+  PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useCall } from '../context/CallContext';
@@ -25,10 +26,22 @@ export default function DialerScreen() {
 
   useEffect(() => {
     loadRecentCalls();
-    if (isAvailable) {
-      register().catch(() => {});
-    }
   }, []);
+
+  async function ensureMicPermission() {
+    if (Platform.OS !== 'android') return true;
+    const check = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+    if (check) return true;
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      {
+        title: 'Microphone Permission',
+        message: 'Kraydl Dialer needs microphone access to make calls.',
+        buttonPositive: 'Allow',
+      }
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  }
 
   // Navigate to incoming call screen when invite arrives
   useEffect(() => {
@@ -65,6 +78,13 @@ export default function DialerScreen() {
       Alert.alert('Error', 'Enter a number to call');
       return;
     }
+
+    const hasMic = await ensureMicPermission();
+    if (!hasMic) {
+      Alert.alert('Permission Required', 'Microphone permission is needed to make calls.');
+      return;
+    }
+
     // Ensure E.164 format
     const formatted = dialNumber.startsWith('+') ? dialNumber : `+${dialNumber}`;
     try {
