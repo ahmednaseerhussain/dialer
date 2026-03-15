@@ -4,7 +4,6 @@ import {
   TextInput, Alert, RefreshControl, PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -155,13 +154,13 @@ export default function ContactsScreen() {
                 style={styles.callIcon}
                 onPress={() => handleCall(item.phone)}
               >
-                <Ionicons name="call" size={20} color="#22c55e" />
+                <Text style={{ fontSize: 20 }}>📞</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.deleteIcon}
                 onPress={() => handleDelete(item.id)}
               >
-                <MaterialIcons name="delete" size={22} color="#ef4444" />
+                <Text style={{ fontSize: 18, color: '#ef4444' }}>🗑️</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -174,7 +173,7 @@ export default function ContactsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0f172a',
   },
   searchBar: {
     flexDirection: 'row',
@@ -183,7 +182,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#1e293b',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -211,7 +210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#1e293b',
     marginRight: 8,
   },
   filterChipActive: {

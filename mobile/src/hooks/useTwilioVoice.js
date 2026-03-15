@@ -19,9 +19,8 @@ try {
 export default function useTwilioVoice() {
   const voiceRef = useRef(null);
   const {
-    activeCall, isMuted, isOnHold,
     setActiveCall, setCallState, setCallInfo,
-    setIsMuted, setIsOnHold, setIsSpeaker, setIncomingInvite,
+    setIsMuted, setIsOnHold, setIncomingInvite,
     startTimer, stopTimer, resetCall,
   } = useCall();
 
@@ -154,62 +153,38 @@ export default function useTwilioVoice() {
     }
   }, []);
 
-  const hangup = useCallback(async () => {
+  const hangup = useCallback(async (call) => {
     try {
-      if (activeCall) await activeCall.disconnect();
+      await call.disconnect();
     } catch (err) {
       console.error('Hangup error:', err);
       resetCall();
     }
-  }, [activeCall]);
+  }, []);
 
-  const toggleMute = useCallback(async () => {
+  const toggleMute = useCallback(async (call, muted) => {
     try {
-      if (activeCall) {
-        await activeCall.mute(!isMuted);
-        setIsMuted(!isMuted);
-      }
+      await call.mute(!muted);
+      setIsMuted(!muted);
     } catch (err) {
       console.error('Mute error:', err);
     }
-  }, [activeCall, isMuted]);
+  }, []);
 
-  const toggleHold = useCallback(async () => {
+  const toggleHold = useCallback(async (call, held) => {
     try {
-      if (activeCall) {
-        await activeCall.hold(!isOnHold);
-        setIsOnHold(!isOnHold);
-      }
+      await call.hold(!held);
+      setIsOnHold(!held);
     } catch (err) {
       console.error('Hold error:', err);
     }
-  }, [activeCall, isOnHold]);
+  }, []);
 
-  const sendDigits = useCallback(async (digits) => {
+  const sendDigits = useCallback(async (call, digits) => {
     try {
-      if (activeCall) await activeCall.sendDigits(digits);
+      await call.sendDigits(digits);
     } catch (err) {
       console.error('Send digits error:', err);
-    }
-  }, [activeCall]);
-
-  const toggleSpeaker = useCallback(async (speakerOn) => {
-    if (!Voice || !voiceRef.current) return;
-    try {
-      const audioDevices = await voiceRef.current.getAudioDevices();
-      if (!audioDevices || !audioDevices.audioDevices) return;
-      
-      const targetType = speakerOn ? 'speaker' : 'earpiece';
-      const device = audioDevices.audioDevices.find(
-        d => d.type?.toLowerCase() === targetType
-      );
-      
-      if (device) {
-        await device.select();
-        setIsSpeaker(speakerOn);
-      }
-    } catch (err) {
-      console.error('Toggle speaker error:', err);
     }
   }, []);
 
@@ -222,7 +197,6 @@ export default function useTwilioVoice() {
     toggleMute,
     toggleHold,
     sendDigits,
-    toggleSpeaker,
     isAvailable: !!Voice,
   };
 }

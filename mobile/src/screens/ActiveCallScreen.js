@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, StatusBar, Alert,
+  View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
-const KEYPAD = [
+const DTMF_KEYS = [
   ['1', '2', '3'],
   ['4', '5', '6'],
   ['7', '8', '9'],
@@ -17,218 +16,121 @@ const KEYPAD = [
 export default function ActiveCallScreen() {
   const navigation = useNavigation();
   const {
-    activeCall, callState, callInfo, isMuted, isOnHold, isSpeaker,
-    callDuration,
+    activeCall, callState, callInfo,
+    isMuted, isOnHold, callDuration,
   } = useCall();
-  const { hangup, toggleMute, toggleHold, sendDigits, toggleSpeaker } = useTwilioVoice();
-  const [showKeypad, setShowKeypad] = useState(false);
-  const [dtmf, setDtmf] = useState('');
+  const { hangup, toggleMute, toggleHold, sendDigits } = useTwilioVoice();
+  const [notes, setNotes] = useState('');
+  const [showDTMF, setShowDTMF] = useState(false);
 
-  const displayNumber = callInfo?.number || 'Unknown';
-  const displayName = callInfo?.name || '';
-
-  useEffect(() => {
-    if (callState === 'disconnected') {
-      navigation.replace('Main');
-    }
-  }, [callState]);
-
-  function formatDuration(sec) {
-    if (!sec) return '00:00';
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60);
     const s = sec % 60;
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
 
-  function handleHangup() {
-    Alert.alert('End Call', 'Are you sure you want to end this call?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'End Call', style: 'destructive', onPress: () => hangup() },
-    ]);
+  async function handleHangup() {
+    if (activeCall) {
+      await hangup(activeCall);
+    }
+    navigation.goBack();
   }
 
-  function handleMute() {
-    toggleMute();
-  }
-
-  function handleHold() {
-    toggleHold();
-  }
-
-  function handleSpeaker() {
-    toggleSpeaker(!isSpeaker);
-  }
-
-  function handleKeypadPress(digit) {
-    setDtmf((prev) => prev + digit);
-    sendDigits(digit);
-  }
-
-  function handleKeypadClose() {
-    setShowKeypad(false);
-    setDtmf('');
+  function handleDTMF(digit) {
+    if (activeCall) {
+      sendDigits(activeCall, digit);
+    }
   }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
-
-      {/* Call Info */}
-      <View style={styles.callInfo}>
-        <Text style={styles.callState}>
-          {callState === 'connecting' && 'Calling...'}
-          {callState === 'ringing' && 'Ringing...'}
-          {callState === 'connected' && (isOnHold ? 'On Hold' : 'Connected')}
-        </Text>
-        
-        <View style={styles.contactCircle}>
-          <Ionicons name="person" size={60} color="#4CAF50" />
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Caller Info */}
+        <View style={styles.callerInfo}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {callInfo?.name?.[0] || '📞'}
+            </Text>
+          </View>
+          <Text style={styles.callerNumber}>{callInfo?.number || 'Unknown'}</Text>
+          <Text style={styles.callStatus}>
+            {callState === 'connecting' ? 'Connecting...' :
+             callState === 'connected' ? formatTime(callDuration) :
+             callState === 'reconnecting' ? 'Reconnecting...' :
+             'Call Ended'}
+          </Text>
+          <Text style={styles.direction}>
+            {callInfo?.direction === 'inbound' ? '↙️ Incoming' : '↗️ Outgoing'}
+          </Text>
         </View>
 
-        {displayName ? (
-          <>
-            <Text style={styles.contactName}>{displayName}</Text>
-            <Text style={styles.phoneNumber}>{displayNumber}</Text>
-          </>
-        ) : (
-          <Text style={styles.contactName}>{displayNumber}</Text>
+        {/* DTMF Keypad */}
+        {showDTMF && (
+          <View style={styles.dtmfPad}>
+            {DTMF_KEYS.map((row, i) => (
+              <View key={i} style={styles.dtmfRow}>
+                {row.map((key) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={styles.dtmfButton}
+                    onPress={() => handleDTMF(key)}
+                  >
+                    <Text style={styles.dtmfText}>{key}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </View>
         )}
 
-        {callState === 'connected' && (
-          <Text style={styles.duration}>{formatDuration(callDuration)}</Text>
-        )}
-      </View>
+        {/* Notes */}
+        <TextInput
+          style={styles.notesInput}
+          placeholder="Call notes..."
+          placeholderTextColor="#64748b"
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          numberOfLines={3}
+        />
 
-      {/* Controls */}
-      <View style={styles.controls}>
-        <View style={styles.controlRow}>
-          <TouchableOpacity 
-            style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-            onPress={handleMute}
-            activeOpacity={0.7}
+        {/* Controls */}
+        <View style={styles.controls}>
+          <TouchableOpacity
+            style={[styles.controlButton, isMuted && styles.controlActive]}
+            onPress={() => activeCall && toggleMute(activeCall, isMuted)}
           >
-            <Ionicons 
-              name={isMuted ? 'mic-off' : 'mic'} 
-              size={28} 
-              color={isMuted ? '#f44336' : '#fff'} 
-            />
-            <Text style={[styles.controlLabel, isMuted && styles.controlLabelActive]}>Mute</Text>
+            <Text style={styles.controlIcon}>{isMuted ? '🔇' : '🎤'}</Text>
+            <Text style={styles.controlLabel}>Mute</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.controlButton}
-            onPress={() => setShowKeypad(true)}
-            activeOpacity={0.7}
+          <TouchableOpacity
+            style={[styles.controlButton, isOnHold && styles.controlActive]}
+            onPress={() => activeCall && toggleHold(activeCall, isOnHold)}
           >
-            <MaterialCommunityIcons name="dialpad" size={28} color="#fff" />
+            <Text style={styles.controlIcon}>{isOnHold ? '▶️' : '⏸️'}</Text>
+            <Text style={styles.controlLabel}>Hold</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={() => setShowDTMF(!showDTMF)}
+          >
+            <Text style={styles.controlIcon}>🔢</Text>
             <Text style={styles.controlLabel}>Keypad</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.controlButton, isSpeaker && styles.controlButtonActive]}
-            onPress={handleSpeaker}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name={isSpeaker ? 'volume-high' : 'volume-medium'} 
-              size={28} 
-              color={isSpeaker ? '#4CAF50' : '#fff'} 
-            />
-            <Text style={[styles.controlLabel, isSpeaker && styles.controlLabelActive]}>Speaker</Text>
+          <TouchableOpacity style={styles.controlButton}>
+            <Text style={styles.controlIcon}>🔊</Text>
+            <Text style={styles.controlLabel}>Speaker</Text>
           </TouchableOpacity>
         </View>
+      </ScrollView>
 
-        <View style={styles.controlRow}>
-          <TouchableOpacity 
-            style={[styles.controlButton, isOnHold && styles.controlButtonActive]}
-            onPress={handleHold}
-            activeOpacity={0.7}
-          >
-            <Ionicons 
-              name={isOnHold ? 'play' : 'pause'} 
-              size={28} 
-              color={isOnHold ? '#FF9800' : '#fff'} 
-            />
-            <Text style={[styles.controlLabel, isOnHold && styles.controlLabelActive]}>
-              {isOnHold ? 'Resume' : 'Hold'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.controlButton}
-            disabled
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="account-plus" size={28} color="#666" />
-            <Text style={[styles.controlLabel, { color: '#666' }]}>Add Call</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.controlButton}
-            disabled
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="phone-forward" size={28} color="#666" />
-            <Text style={[styles.controlLabel, { color: '#666' }]}>Transfer</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Hang Up Button */}
-      <TouchableOpacity 
-        style={styles.hangupButton}
-        onPress={handleHangup}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="call" size={32} color="#fff" />
+      {/* Hangup */}
+      <TouchableOpacity style={styles.hangupButton} onPress={handleHangup}>
+        <Text style={styles.hangupText}>End Call</Text>
       </TouchableOpacity>
-
-      {/* DTMF Keypad Modal */}
-      <Modal
-        visible={showKeypad}
-        transparent
-        animationType="slide"
-        onRequestClose={handleKeypadClose}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={handleKeypadClose}
-        >
-          <TouchableOpacity 
-            style={styles.keypadModal} 
-            activeOpacity={1}
-          >
-            <View style={styles.keypadHeader}>
-              <Text style={styles.dtmfDisplay}>{dtmf || 'Enter digits'}</Text>
-              <TouchableOpacity onPress={handleKeypadClose}>
-                <Ionicons name="close" size={28} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.keypadGrid}>
-              {KEYPAD.map((row, i) => (
-                <View key={i} style={styles.keypadRow}>
-                  {row.map((digit) => (
-                    <TouchableOpacity
-                      key={digit}
-                      style={styles.keypadBtn}
-                      onPress={() => handleKeypadPress(digit)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.keypadDigit}>{digit}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 }
@@ -236,131 +138,113 @@ export default function ActiveCallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
-    justifyContent: 'space-between',
-    paddingVertical: 40,
+    backgroundColor: '#0f172a',
   },
-  callInfo: {
+  content: {
+    padding: 20,
     alignItems: 'center',
-    paddingTop: 40,
   },
-  callState: {
-    color: '#888',
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 32,
+  callerInfo: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 30,
   },
-  contactCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2a2a3e',
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 3,
-    borderColor: '#4CAF50',
+    marginBottom: 16,
   },
-  contactName: {
+  avatarText: {
+    fontSize: 32,
+  },
+  callerNumber: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '600',
     marginBottom: 8,
   },
-  phoneNumber: {
-    color: '#888',
+  callStatus: {
+    color: '#22c55e',
     fontSize: 18,
-    marginBottom: 12,
-  },
-  duration: {
-    color: '#4CAF50',
-    fontSize: 20,
     fontWeight: '500',
-    marginTop: 8,
+    marginBottom: 4,
+  },
+  direction: {
+    color: '#94a3b8',
+    fontSize: 14,
   },
   controls: {
-    paddingHorizontal: 20,
-  },
-  controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 32,
+    width: '100%',
+    marginVertical: 20,
   },
   controlButton: {
     alignItems: 'center',
-    width: 80,
+    padding: 12,
   },
-  controlButtonActive: {
-    opacity: 1,
+  controlActive: {
+    backgroundColor: '#334155',
+    borderRadius: 12,
+  },
+  controlIcon: {
+    fontSize: 28,
+    marginBottom: 4,
   },
   controlLabel: {
-    color: '#fff',
+    color: '#94a3b8',
     fontSize: 12,
-    marginTop: 8,
   },
-  controlLabelActive: {
-    color: '#4CAF50',
+  dtmfPad: {
+    marginVertical: 16,
+  },
+  dtmfRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  dtmfButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  dtmfText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '500',
+  },
+  notesInput: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: '#fff',
+    fontSize: 14,
+    width: '100%',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   hangupButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#f44336',
-    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    borderRadius: 16,
+    paddingVertical: 18,
+    marginHorizontal: 20,
+    marginBottom: 40,
     alignItems: 'center',
-    alignSelf: 'center',
-    elevation: 4,
-    shadowColor: '#f44336',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    transform: [{ rotate: '135deg' }],
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'flex-end',
-  },
-  keypadModal: {
-    backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 32,
-  },
-  keypadHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2a2a3e',
-  },
-  dtmfDisplay: {
+  hangupText: {
     color: '#fff',
-    fontSize: 24,
-    fontWeight: '300',
-    letterSpacing: 4,
-  },
-  keypadGrid: {
-    padding: 20,
-  },
-  keypadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  keypadBtn: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#2a2a3e',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  keypadDigit: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '400',
+    fontSize: 20,
+    fontWeight: '700',
   },
 });

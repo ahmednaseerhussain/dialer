@@ -1,42 +1,34 @@
 {
   "expo": {
-    "name": "Kraydl Dialer",
-    "slug": "kraydl-dialer",
+    "name": "mobile",
+    "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.kraydl.dialer"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
-        "foregroundImage": "./assets/icon.png"
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.kraydl.dialer",
-      "permissions": [
-        "RECORD_AUDIO",
-        "BLUETOOTH_CONNECT",
-        "POST_NOTIFICATIONS"
-      ]
+      "package": "com.ahmednaseerhussain.mobile",
+      "permissions": ["RECORD_AUDIO", "BLUETOOTH_CONNECT", "POST_NOTIFICATIONS"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "./plugins/withTwilioVoice"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "470b6a1d-1a64-486f-9c80-37e919f48611"
-      }
-    }
+    ]
   }
 }

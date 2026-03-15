@@ -245,7 +245,7 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0f172a',
   },
   content: {
     padding: 16,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   formCard: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   statsCard: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   userCard: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: '#1e293b',
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,

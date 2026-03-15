@@ -4,7 +4,6 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { MaterialIcons } from '@expo/vector-icons';
 import api from '../services/api';
 
 const FILTERS = ['All', 'Outbound', 'Inbound'];
@@ -81,21 +80,9 @@ export default function CallHistoryScreen() {
           // Could navigate to detail or redial
         }}
       >
-        <View style={styles.directionIconContainer}>
-          <MaterialIcons 
-            name={
-              isOutbound 
-                ? 'call-made' 
-                : (item.status === 'no-answer' ? 'call-missed' : 'call-received')
-            } 
-            size={20} 
-            color={
-              isOutbound 
-                ? '#22c55e' 
-                : (item.status === 'no-answer' ? '#f59e0b' : '#3b82f6')
-            } 
-          />
-        </View>
+        <Text style={styles.directionIcon}>
+          {isOutbound ? '↗️' : item.status === 'no-answer' ? '📵' : '↙️'}
+        </Text>
         <View style={styles.callInfo}>
           <Text style={styles.callNumber}>{displayNumber || 'Unknown'}</Text>
           <Text style={styles.callMeta}>
@@ -161,7 +148,7 @@ export default function CallHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0f172a',
   },
   filters: {
     flexDirection: 'row',
@@ -193,13 +180,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
-  directionIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#2a2a3e',
-    justifyContent: 'center',
-    alignItems: 'center',
+  directionIcon: {
+    fontSize: 20,
     marginRight: 12,
   },
   callInfo: {

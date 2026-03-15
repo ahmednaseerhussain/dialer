@@ -20,10 +20,9 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const screenOptions = {
-  headerStyle: { backgroundColor: '#1a1a2e' },
+  headerStyle: { backgroundColor: '#0f172a' },
   headerTintColor: '#fff',
   headerTitleStyle: { fontWeight: '600' },
-  contentStyle: { backgroundColor: '#1a1a2e' },
 };
 
 function MainTabs() {
@@ -33,16 +32,9 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         ...screenOptions,
-        tabBarStyle: { 
-          backgroundColor: '#1a1a2e', 
-          borderTopColor: '#2a2a3e',
-          borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: '#4CAF50',
-        tabBarInactiveTintColor: '#666',
+        tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
+        tabBarActiveTintColor: '#3b82f6',
+        tabBarInactiveTintColor: '#64748b',
       }}
     >
       <Tab.Screen
@@ -51,43 +43,28 @@ function MainTabs() {
         options={{
           title: 'Dialer',
           tabBarLabel: 'Dial',
-          tabBarStyle: { display: 'none' }, // Hide tab bar on Dialer screen
-          headerStyle: { backgroundColor: '#1a1a2e' },
-          headerShown: false, // Hide header on Dialer screen
+          headerRight: () => (
+            <TouchableOpacity onPress={logout} style={{ marginRight: 16 }}>
+              <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600' }}>Logout</Text>
+            </TouchableOpacity>
+          ),
         }}
       />
       <Tab.Screen
         name="History"
         component={CallHistoryScreen}
-        options={{ 
-          title: 'Call History', 
-          tabBarLabel: 'History',
-          headerStyle: { backgroundColor: '#1a1a2e' },
-        }}
+        options={{ title: 'Call History', tabBarLabel: 'History' }}
       />
       <Tab.Screen
         name="Contacts"
         component={ContactsScreen}
-        options={{ 
-          title: 'Contacts', 
-          tabBarLabel: 'Contacts',
-          headerStyle: { backgroundColor: '#1a1a2e' },
-          headerRight: () => (
-            <TouchableOpacity onPress={logout} style={{ marginRight: 16 }}>
-              <Text style={{ color: '#f44336', fontSize: 14, fontWeight: '600' }}>Logout</Text>
-            </TouchableOpacity>
-          ),
-        }}
+        options={{ title: 'Contacts', tabBarLabel: 'Contacts' }}
       />
       {user?.is_admin ? (
         <Tab.Screen
           name="Admin"
           component={AdminScreen}
-          options={{ 
-            title: 'Admin', 
-            tabBarLabel: 'Admin',
-            headerStyle: { backgroundColor: '#1a1a2e' },
-          }}
+          options={{ title: 'Admin', tabBarLabel: 'Admin' }}
         />
       ) : null}
     </Tab.Navigator>
@@ -99,8 +76,8 @@ function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e' }}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
