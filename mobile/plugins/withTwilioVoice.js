@@ -49,21 +49,18 @@ function withTwilioVoice(config) {
 
       fs.writeFileSync(mainAppPath, contents, 'utf8');
 
-      // Create twilio_config.xml to disable Firebase messaging service
-      // (prevents crash when google-services.json is not configured)
+      // Create twilio_config.xml to enable Firebase messaging service for incoming calls
       const valuesDir = path.join(
         config.modRequest.platformProjectRoot,
         'app', 'src', 'main', 'res', 'values'
       );
       const twilioConfigPath = path.join(valuesDir, 'twilio_config.xml');
-      if (!fs.existsSync(twilioConfigPath)) {
-        fs.mkdirSync(valuesDir, { recursive: true });
-        fs.writeFileSync(twilioConfigPath, `<?xml version="1.0" encoding="utf-8"?>
+      fs.mkdirSync(valuesDir, { recursive: true });
+      fs.writeFileSync(twilioConfigPath, `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <bool name="twiliovoicereactnative_firebasemessagingservice_enabled">false</bool>
+  <bool name="twiliovoicereactnative_firebasemessagingservice_enabled">true</bool>
 </resources>
 `, 'utf8');
-      }
 
       return config;
     },

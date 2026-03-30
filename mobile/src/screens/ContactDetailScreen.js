@@ -4,6 +4,7 @@ import {
   ScrollView, Alert, FlatList, PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import api from '../services/api';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -166,7 +167,8 @@ export default function ContactDetailScreen() {
 
         {!isNew && phone && (
           <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-            <Text style={styles.callButtonText}>📞 Call</Text>
+            <Ionicons name="call" size={20} color="#fff" />
+            <Text style={styles.callButtonText}>Call</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -177,9 +179,13 @@ export default function ContactDetailScreen() {
           <Text style={styles.historyTitle}>Call History</Text>
           {callHistory.map((c) => (
             <View key={c.id} style={styles.historyItem}>
-              <Text style={styles.historyIcon}>
-                {c.direction === 'outbound' ? '↗️' : '↙️'}
-              </Text>
+              <View style={styles.historyIconWrap}>
+                <Ionicons
+                  name={c.direction === 'outbound' ? 'arrow-redo' : 'arrow-undo'}
+                  size={16}
+                  color={c.direction === 'outbound' ? '#3b82f6' : '#22c55e'}
+                />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyDate}>
                   {new Date(c.created_at).toLocaleString()}
@@ -275,6 +281,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
   },
   callButtonText: {
     color: '#fff',
@@ -298,8 +306,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
-  historyIcon: {
-    fontSize: 16,
+  historyIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   historyDate: {

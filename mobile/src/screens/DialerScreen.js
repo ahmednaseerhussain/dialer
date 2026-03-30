@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert,
   PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 import api from '../services/api';
 
 const KEYPAD = [
-  ['1', '2', '3'],
-  ['4', '5', '6'],
-  ['7', '8', '9'],
-  ['*', '0', '#'],
+  [{ digit: '1', sub: '' }, { digit: '2', sub: 'ABC' }, { digit: '3', sub: 'DEF' }],
+  [{ digit: '4', sub: 'GHI' }, { digit: '5', sub: 'JKL' }, { digit: '6', sub: 'MNO' }],
+  [{ digit: '7', sub: 'PQRS' }, { digit: '8', sub: 'TUV' }, { digit: '9', sub: 'WXYZ' }],
+  [{ digit: '*', sub: '' }, { digit: '0', sub: '+' }, { digit: '#', sub: '' }],
 ];
 
 export default function DialerScreen() {
@@ -26,6 +27,7 @@ export default function DialerScreen() {
 
   useEffect(() => {
     loadRecentCalls();
+    register();
   }, []);
 
   async function ensureMicPermission() {
@@ -102,11 +104,12 @@ export default function DialerScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Status */}
       <View style={styles.statusBar}>
         <Text style={styles.agentName}>{user?.full_name}</Text>
         <View style={[styles.statusBadge, callState !== 'idle' && styles.statusBusy]}>
+          <View style={[styles.statusDot, callState !== 'idle' && styles.statusDotBusy]} />
           <Text style={styles.statusText}>
             {callState === 'idle' ? 'Available' : 'On Call'}
           </Text>
@@ -125,7 +128,7 @@ export default function DialerScreen() {
         />
         {number.length > 0 && (
           <TouchableOpacity onPress={handleBackspace} style={styles.backspace}>
-            <Text style={styles.backspaceText}>⌫</Text>
+            <Ionicons name="backspace-outline" size={24} color="#94a3b8" />
           </TouchableOpacity>
         )}
       </View>
@@ -134,13 +137,15 @@ export default function DialerScreen() {
       <View style={styles.keypad}>
         {KEYPAD.map((row, i) => (
           <View key={i} style={styles.keypadRow}>
-            {row.map((key) => (
+            {row.map(({ digit, sub }) => (
               <TouchableOpacity
-                key={key}
+                key={digit}
                 style={styles.keypadButton}
-                onPress={() => handleKeyPress(key)}
+                onPress={() => handleKeyPress(digit)}
+                activeOpacity={0.6}
               >
-                <Text style={styles.keypadText}>{key}</Text>
+                <Text style={styles.keypadText}>{digit}</Text>
+                {sub ? <Text style={styles.keypadSub}>{sub}</Text> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -148,42 +153,44 @@ export default function DialerScreen() {
       </View>
 
       {/* Call Button */}
-      <TouchableOpacity style={styles.callButton} onPress={handleCall}>
-        <Text style={styles.callButtonText}>📞 Call</Text>
+      <TouchableOpacity style={styles.callButton} onPress={handleCall} activeOpacity={0.7}>
+        <Ionicons name="call" size={24} color="#fff" />
       </TouchableOpacity>
 
       {/* Recent Calls */}
       {recentCalls.length > 0 && (
         <View style={styles.recentSection}>
           <Text style={styles.recentTitle}>Recent</Text>
-          <FlatList
-            data={recentCalls}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.recentItem}
-                onPress={() => {
-                  const redialNumber = item.direction === 'outbound' ? item.to_number : item.from_number;
-                  setNumber(redialNumber || '');
-                }}
-              >
-                <Text style={styles.recentIcon}>
-                  {item.direction === 'outbound' ? '↗️' : '↙️'}
+          {recentCalls.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.recentItem}
+              onPress={() => {
+                const redialNumber = item.direction === 'outbound' ? item.to_number : item.from_number;
+                setNumber(redialNumber || '');
+              }}
+            >
+              <View style={[styles.recentIconWrap, item.direction === 'inbound' && styles.recentIconInbound]}>
+                <Ionicons
+                  name={item.direction === 'outbound' ? 'call-outline' : 'call-outline'}
+                  size={16}
+                  color={item.direction === 'outbound' ? '#3b82f6' : '#22c55e'}
+                />
+              </View>
+              <View style={styles.recentInfo}>
+                <Text style={styles.recentNumber}>
+                  {item.direction === 'outbound' ? item.to_number : item.from_number}
                 </Text>
-                <View style={styles.recentInfo}>
-                  <Text style={styles.recentNumber}>
-                    {item.direction === 'outbound' ? item.to_number : item.from_number}
-                  </Text>
-                  <Text style={styles.recentMeta}>
-                    {formatDuration(item.duration_sec)} · {item.status}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
+                <Text style={styles.recentMeta}>
+                  {item.direction === 'outbound' ? 'Outgoing' : 'Incoming'} · {formatDuration(item.duration_sec)} · {item.status}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+          ))}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -191,8 +198,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f172a',
+  },
+  scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 32,
   },
   statusBar: {
     flexDirection: 'row',
@@ -206,12 +216,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusBadge: {
-    backgroundColor: '#22c55e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34,197,94,0.15)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   statusBusy: {
+    backgroundColor: 'rgba(239,68,68,0.15)',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+    marginRight: 6,
+  },
+  statusDotBusy: {
     backgroundColor: '#ef4444',
   },
   statusText: {
@@ -223,32 +245,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1e293b',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    paddingVertical: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   numberText: {
     flex: 1,
     color: '#fff',
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '500',
     letterSpacing: 2,
   },
   backspace: {
     padding: 8,
   },
-  backspaceText: {
-    color: '#94a3b8',
-    fontSize: 24,
-  },
   keypad: {
     marginBottom: 16,
+    alignItems: 'center',
   },
   keypadRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   keypadButton: {
     width: 72,
@@ -257,52 +278,72 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 12,
+    marginHorizontal: 10,
   },
   keypadText: {
     color: '#fff',
     fontSize: 28,
     fontWeight: '500',
   },
+  keypadSub: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 2,
+    marginTop: -2,
+  },
   callButton: {
     backgroundColor: '#22c55e',
-    borderRadius: 16,
-    paddingVertical: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  callButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
+    alignSelf: 'center',
+    marginBottom: 24,
+    elevation: 4,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   recentSection: {
-    flex: 1,
+    marginTop: 4,
   },
   recentTitle: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
     textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
-  recentIcon: {
-    fontSize: 18,
+  recentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  recentIconInbound: {
+    backgroundColor: 'rgba(34,197,94,0.12)',
   },
   recentInfo: {
     flex: 1,
   },
   recentNumber: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '500',
   },
   recentMeta: {
     color: '#64748b',

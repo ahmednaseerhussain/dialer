@@ -12,6 +12,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const voiceGrant = new VoiceGrant({
       outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID,
+      pushCredentialSid: process.env.TWILIO_PUSH_CREDENTIAL_SID,
       incomingAllow: true,
     });
 

@@ -8,6 +8,7 @@ export function CallProvider({ children }) {
   const [callInfo, setCallInfo] = useState(null); // { number, name, direction }
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [incomingInvite, setIncomingInvite] = useState(null);
   const timerRef = useRef(null);
@@ -33,6 +34,7 @@ export function CallProvider({ children }) {
     setCallInfo(null);
     setIsMuted(false);
     setIsOnHold(false);
+    setIsSpeaker(false);
     setCallDuration(0);
   }
 
@@ -44,6 +46,7 @@ export function CallProvider({ children }) {
         callInfo, setCallInfo,
         isMuted, setIsMuted,
         isOnHold, setIsOnHold,
+        isSpeaker, setIsSpeaker,
         callDuration, setCallDuration,
         incomingInvite, setIncomingInvite,
         startTimer, stopTimer, resetCall,

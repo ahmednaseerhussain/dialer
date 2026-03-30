@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "91659898163",
+    "project_id": "dailer-app-kraydl",
+    "storage_bucket": "dailer-app-kraydl.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:91659898163:android:1334791741fdd04e2e0246",
+        "android_client_info": {
+          "package_name": "com.ahmednaseerhussain.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCP1N4dxAddIM59NvynzcH-EmjLCAfsjMw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

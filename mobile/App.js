@@ -3,6 +3,7 @@ import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CallProvider } from './src/context/CallContext';
@@ -30,12 +31,21 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         ...screenOptions,
         tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
         tabBarActiveTintColor: '#3b82f6',
         tabBarInactiveTintColor: '#64748b',
-      }}
+        tabBarIcon: ({ color, size }) => {
+          const icons = {
+            Dialer: 'keypad',
+            History: 'time',
+            Contacts: 'people',
+            Admin: 'settings',
+          };
+          return <Ionicons name={icons[route.name] || 'ellipse'} size={size} color={color} />;
+        },
+      })}
     >
       <Tab.Screen
         name="Dialer"

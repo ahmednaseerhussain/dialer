@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -17,9 +18,9 @@ export default function ActiveCallScreen() {
   const navigation = useNavigation();
   const {
     activeCall, callState, callInfo,
-    isMuted, isOnHold, callDuration,
+    isMuted, isOnHold, isSpeaker, callDuration,
   } = useCall();
-  const { hangup, toggleMute, toggleHold, sendDigits } = useTwilioVoice();
+  const { hangup, toggleMute, toggleHold, sendDigits, toggleSpeaker } = useTwilioVoice();
   const [notes, setNotes] = useState('');
   const [showDTMF, setShowDTMF] = useState(false);
 
@@ -48,20 +49,33 @@ export default function ActiveCallScreen() {
         {/* Caller Info */}
         <View style={styles.callerInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {callInfo?.name?.[0] || '📞'}
-            </Text>
+            {callInfo?.name?.[0] ? (
+              <Text style={styles.avatarText}>{callInfo.name[0]}</Text>
+            ) : (
+              <Ionicons name="person" size={36} color="#94a3b8" />
+            )}
           </View>
           <Text style={styles.callerNumber}>{callInfo?.number || 'Unknown'}</Text>
-          <Text style={styles.callStatus}>
+          <Text style={[
+            styles.callStatus,
+            callState === 'connecting' && styles.callStatusConnecting,
+            callState === 'disconnected' && styles.callStatusEnded,
+          ]}>
             {callState === 'connecting' ? 'Connecting...' :
              callState === 'connected' ? formatTime(callDuration) :
              callState === 'reconnecting' ? 'Reconnecting...' :
              'Call Ended'}
           </Text>
-          <Text style={styles.direction}>
-            {callInfo?.direction === 'inbound' ? '↙️ Incoming' : '↗️ Outgoing'}
-          </Text>
+          <View style={styles.directionBadge}>
+            <Ionicons
+              name={callInfo?.direction === 'inbound' ? 'arrow-down' : 'arrow-up'}
+              size={14}
+              color={callInfo?.direction === 'inbound' ? '#22c55e' : '#3b82f6'}
+            />
+            <Text style={styles.directionText}>
+              {callInfo?.direction === 'inbound' ? 'Incoming' : 'Outgoing'}
+            </Text>
+          </View>
         </View>
 
         {/* DTMF Keypad */}
@@ -74,6 +88,7 @@ export default function ActiveCallScreen() {
                     key={key}
                     style={styles.dtmfButton}
                     onPress={() => handleDTMF(key)}
+                    activeOpacity={0.6}
                   >
                     <Text style={styles.dtmfText}>{key}</Text>
                   </TouchableOpacity>
@@ -99,36 +114,52 @@ export default function ActiveCallScreen() {
           <TouchableOpacity
             style={[styles.controlButton, isMuted && styles.controlActive]}
             onPress={() => activeCall && toggleMute(activeCall, isMuted)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.controlIcon}>{isMuted ? '🔇' : '🎤'}</Text>
-            <Text style={styles.controlLabel}>Mute</Text>
+            <View style={[styles.controlIconWrap, isMuted && styles.controlIconWrapActive]}>
+              <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={24} color={isMuted ? '#ef4444' : '#fff'} />
+            </View>
+            <Text style={[styles.controlLabel, isMuted && styles.controlLabelActive]}>Mute</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.controlButton, isOnHold && styles.controlActive]}
             onPress={() => activeCall && toggleHold(activeCall, isOnHold)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.controlIcon}>{isOnHold ? '▶️' : '⏸️'}</Text>
-            <Text style={styles.controlLabel}>Hold</Text>
+            <View style={[styles.controlIconWrap, isOnHold && styles.controlIconWrapActive]}>
+              <Ionicons name={isOnHold ? 'play' : 'pause'} size={24} color={isOnHold ? '#f59e0b' : '#fff'} />
+            </View>
+            <Text style={[styles.controlLabel, isOnHold && styles.controlLabelActive]}>Hold</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.controlButton}
+            style={[styles.controlButton, showDTMF && styles.controlActive]}
             onPress={() => setShowDTMF(!showDTMF)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.controlIcon}>🔢</Text>
+            <View style={[styles.controlIconWrap, showDTMF && styles.controlIconWrapActive]}>
+              <Ionicons name="keypad" size={24} color="#fff" />
+            </View>
             <Text style={styles.controlLabel}>Keypad</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlButton}>
-            <Text style={styles.controlIcon}>🔊</Text>
-            <Text style={styles.controlLabel}>Speaker</Text>
+          <TouchableOpacity
+            style={[styles.controlButton, isSpeaker && styles.controlActive]}
+            onPress={() => toggleSpeaker(isSpeaker)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.controlIconWrap, isSpeaker && styles.controlIconWrapActive]}>
+              <Ionicons name={isSpeaker ? 'volume-high' : 'volume-medium'} size={24} color={isSpeaker ? '#3b82f6' : '#fff'} />
+            </View>
+            <Text style={[styles.controlLabel, isSpeaker && styles.controlLabelActive]}>Speaker</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Hangup */}
-      <TouchableOpacity style={styles.hangupButton} onPress={handleHangup}>
+      <TouchableOpacity style={styles.hangupButton} onPress={handleHangup} activeOpacity={0.7}>
+        <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
         <Text style={styles.hangupText}>End Call</Text>
       </TouchableOpacity>
     </View>
@@ -150,16 +181,20 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#334155',
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 34,
+    color: '#fff',
+    fontWeight: '700',
   },
   callerNumber: {
     color: '#fff',
@@ -171,11 +206,27 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     fontSize: 18,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  direction: {
+  callStatusConnecting: {
+    color: '#f59e0b',
+  },
+  callStatusEnded: {
+    color: '#ef4444',
+  },
+  directionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  directionText: {
     color: '#94a3b8',
-    fontSize: 14,
+    fontSize: 13,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   controls: {
     flexDirection: 'row',
@@ -185,19 +236,30 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     alignItems: 'center',
-    padding: 12,
+    padding: 8,
   },
-  controlActive: {
+  controlActive: {},
+  controlIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  controlIconWrapActive: {
     backgroundColor: '#334155',
-    borderRadius: 12,
-  },
-  controlIcon: {
-    fontSize: 28,
-    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#475569',
   },
   controlLabel: {
     color: '#94a3b8',
     fontSize: 12,
+    fontWeight: '500',
+  },
+  controlLabelActive: {
+    color: '#fff',
   },
   dtmfPad: {
     marginVertical: 16,
@@ -223,7 +285,7 @@ const styles = StyleSheet.create({
   },
   notesInput: {
     backgroundColor: '#1e293b',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: '#fff',
@@ -237,10 +299,18 @@ const styles = StyleSheet.create({
   hangupButton: {
     backgroundColor: '#ef4444',
     borderRadius: 16,
-    paddingVertical: 18,
+    paddingVertical: 16,
     marginHorizontal: 20,
     marginBottom: 40,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    elevation: 4,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   hangupText: {
     color: '#fff',

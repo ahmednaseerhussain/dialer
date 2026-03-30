@@ -4,6 +4,7 @@ import {
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import api from '../services/api';
 
 const FILTERS = ['All', 'Outbound', 'Inbound'];
@@ -80,9 +81,13 @@ export default function CallHistoryScreen() {
           // Could navigate to detail or redial
         }}
       >
-        <Text style={styles.directionIcon}>
-          {isOutbound ? '↗️' : item.status === 'no-answer' ? '📵' : '↙️'}
-        </Text>
+        <View style={styles.directionIconWrap}>
+          <Ionicons
+            name={isOutbound ? 'arrow-redo' : item.status === 'no-answer' ? 'call-outline' : 'arrow-undo'}
+            size={18}
+            color={isOutbound ? '#3b82f6' : item.status === 'no-answer' ? '#f59e0b' : '#22c55e'}
+          />
+        </View>
         <View style={styles.callInfo}>
           <Text style={styles.callNumber}>{displayNumber || 'Unknown'}</Text>
           <Text style={styles.callMeta}>
@@ -180,8 +185,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
-  directionIcon: {
-    fontSize: 20,
+  directionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   callInfo: {

@@ -38,11 +38,26 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
 
+// Keep Render free-tier alive by pinging /health every 14 minutes
+function startKeepAlive() {
+  const url = process.env.RENDER_EXTERNAL_URL;
+  if (!url) return;
+  setInterval(async () => {
+    try {
+      await fetch(`${url}/health`);
+      console.log('Keep-alive ping sent');
+    } catch (err) {
+      console.warn('Keep-alive ping failed:', err.message);
+    }
+  }, 14 * 60 * 1000);
+}
+
 async function start() {
   try {
     await migrate();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      startKeepAlive();
     });
   } catch (err) {
     console.error('Failed to start server:', err);

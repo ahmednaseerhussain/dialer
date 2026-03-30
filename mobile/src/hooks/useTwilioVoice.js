@@ -16,11 +16,18 @@ try {
   Voice = null;
 }
 
+let InCallManager;
+try {
+  InCallManager = require('react-native-incall-manager').default;
+} catch {
+  InCallManager = null;
+}
+
 export default function useTwilioVoice() {
   const voiceRef = useRef(null);
   const {
     setActiveCall, setCallState, setCallInfo,
-    setIsMuted, setIsOnHold, setIncomingInvite,
+    setIsMuted, setIsOnHold, setIsSpeaker, setIncomingInvite,
     startTimer, stopTimer, resetCall,
   } = useCall();
 
@@ -84,6 +91,7 @@ export default function useTwilioVoice() {
       call.on('connected', () => {
         setCallState('connected');
         startTimer();
+        if (InCallManager) InCallManager.start({ media: 'audio' });
       });
 
       call.on('reconnecting', () => {
@@ -97,11 +105,16 @@ export default function useTwilioVoice() {
       call.on('disconnected', () => {
         setCallState('disconnected');
         stopTimer();
+        if (InCallManager) {
+          InCallManager.setForceSpeakerphoneOn(false);
+          InCallManager.stop();
+        }
         setTimeout(() => resetCall(), 2000);
       });
 
       call.on('connectFailure', (error) => {
         console.error('Call connect failure:', error);
+        if (InCallManager) InCallManager.stop();
         resetCall();
       });
 
@@ -128,11 +141,16 @@ export default function useTwilioVoice() {
       call.on('connected', () => {
         setCallState('connected');
         startTimer();
+        if (InCallManager) InCallManager.start({ media: 'audio' });
       });
 
       call.on('disconnected', () => {
         setCallState('disconnected');
         stopTimer();
+        if (InCallManager) {
+          InCallManager.setForceSpeakerphoneOn(false);
+          InCallManager.stop();
+        }
         setTimeout(() => resetCall(), 2000);
       });
 
@@ -188,6 +206,13 @@ export default function useTwilioVoice() {
     }
   }, []);
 
+  const toggleSpeaker = useCallback((speakerOn) => {
+    if (InCallManager) {
+      InCallManager.setForceSpeakerphoneOn(!speakerOn);
+    }
+    setIsSpeaker(!speakerOn);
+  }, []);
+
   return {
     register,
     makeCall,
@@ -197,6 +222,7 @@ export default function useTwilioVoice() {
     toggleMute,
     toggleHold,
     sendDigits,
+    toggleSpeaker,
     isAvailable: !!Voice,
   };
 }

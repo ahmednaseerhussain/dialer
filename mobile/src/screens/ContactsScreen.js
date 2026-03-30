@@ -4,6 +4,7 @@ import {
   TextInput, Alert, RefreshControl, PermissionsAndroid, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import api from '../services/api';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
@@ -154,13 +155,13 @@ export default function ContactsScreen() {
                 style={styles.callIcon}
                 onPress={() => handleCall(item.phone)}
               >
-                <Text style={{ fontSize: 20 }}>📞</Text>
+                <Ionicons name="call" size={20} color="#22c55e" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.deleteIcon}
                 onPress={() => handleDelete(item.id)}
               >
-                <Text style={{ fontSize: 18, color: '#ef4444' }}>🗑️</Text>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
