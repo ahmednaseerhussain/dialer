@@ -23,7 +23,7 @@
       },
       "package": "com.ahmednaseerhussain.mobile",
       "googleServicesFile": "./google-services.json",
-      "permissions": ["RECORD_AUDIO", "BLUETOOTH_CONNECT", "POST_NOTIFICATIONS"]
+      "permissions": ["RECORD_AUDIO", "BLUETOOTH_CONNECT", "POST_NOTIFICATIONS", "MANAGE_OWN_CALLS", "READ_PHONE_STATE", "CALL_PHONE", "USE_FULL_SCREEN_INTENT", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MICROPHONE", "FOREGROUND_SERVICE_PHONE_CALL"]
     },
     "web": {
       "favicon": "./assets/favicon.png"

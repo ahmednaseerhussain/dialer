@@ -27,12 +27,26 @@ export default function DialerScreen() {
 
   useEffect(() => {
     loadRecentCalls();
-    // Small delay to ensure Voice SDK is initialized in its own useEffect
-    const timer = setTimeout(() => {
-      console.log('[DialerScreen] Calling register()...');
-      register();
-    }, 1500);
-    return () => clearTimeout(timer);
+    // Request all required permissions then register for incoming calls
+    async function initRegistration() {
+      if (Platform.OS === 'android') {
+        const perms = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+        if (Platform.Version >= 31) {
+          perms.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+        }
+        if (Platform.Version >= 33) {
+          perms.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+        }
+        const results = await PermissionsAndroid.requestMultiple(perms);
+        console.log('[DialerScreen] Permissions:', JSON.stringify(results));
+      }
+      // Delay to ensure Voice SDK is initialized in its own useEffect
+      setTimeout(() => {
+        console.log('[DialerScreen] Calling register()...');
+        register();
+      }, 1500);
+    }
+    initRegistration();
   }, []);
 
   async function ensureMicPermission() {
