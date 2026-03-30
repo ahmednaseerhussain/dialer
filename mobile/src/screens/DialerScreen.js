@@ -27,7 +27,12 @@ export default function DialerScreen() {
 
   useEffect(() => {
     loadRecentCalls();
-    register();
+    // Small delay to ensure Voice SDK is initialized in its own useEffect
+    const timer = setTimeout(() => {
+      console.log('[DialerScreen] Calling register()...');
+      register();
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
   async function ensureMicPermission() {

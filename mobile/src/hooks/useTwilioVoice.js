@@ -54,19 +54,21 @@ export default function useTwilioVoice() {
   // will crash the app with "Default FirebaseApp is not initialized".
   // Incoming call push notifications need FCM. Outbound calls work without it.
   const register = useCallback(async () => {
+    console.log('[register] Voice available:', !!Voice, '| voiceRef:', !!voiceRef.current);
     if (!Voice || !voiceRef.current) {
-      console.warn('Twilio Voice SDK not available, skipping registration');
+      console.warn('[register] Twilio Voice SDK not available, skipping registration');
       return null;
     }
     try {
+      console.log('[register] Fetching access token...');
       const { data } = await api.get('/api/token');
-      // Only attempt registration if Firebase is configured.
-      // voice.register() is needed for incoming call push notifications.
-      // voice.connect() for outbound calls works without registration.
+      console.log('[register] Token received, identity:', data.identity);
+      console.log('[register] Registering with Twilio for push notifications...');
       await voiceRef.current.register(data.token);
+      console.log('[register] Successfully registered for incoming calls!');
       return data.token;
     } catch (err) {
-      console.warn('Voice registration failed (Firebase may not be configured):', err?.message || err);
+      console.error('[register] Registration failed:', err?.message || err);
       return null;
     }
   }, []);

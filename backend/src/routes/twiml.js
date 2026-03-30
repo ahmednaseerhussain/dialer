@@ -69,11 +69,14 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
       return res.type('text/xml').send(twiml.toString());
     }
 
-    const agent = rows[0];
     const dial = twiml.dial();
-    dial.client(agent.username);
+    // Ring all agents assigned to this number (handles multiple agents sharing a number)
+    for (const agent of rows) {
+      dial.client(agent.username);
+    }
 
-    // Log the inbound call
+    // Log the inbound call under the first matching agent
+    const agent = rows[0];
     await sql`
       INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
       VALUES (${agent.id}, ${req.body.CallSid}, 'inbound', ${req.body.From}, ${inboundNumber}, 'ringing')
