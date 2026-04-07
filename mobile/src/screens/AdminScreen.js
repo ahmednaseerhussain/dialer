@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, FlatList, Alert, Switch, ActivityIndicator,
+  ScrollView, Alert, Switch, ActivityIndicator, Linking,
 } from 'react-native';
 import api from '../services/api';
 
 export default function AdminScreen() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,17 +26,36 @@ export default function AdminScreen() {
   async function loadData() {
     setLoading(true);
     try {
-      const [usersRes, statsRes] = await Promise.all([
+      const [usersRes, statsRes, locRes] = await Promise.all([
         api.get('/api/admin/users'),
         api.get('/api/admin/stats'),
+        api.get('/api/location'),
       ]);
       setUsers(usersRes.data.users);
       setStats(statsRes.data.stats);
+      setLocations(locRes.data.locations);
     } catch (err) {
       Alert.alert('Error', 'Failed to load admin data');
     } finally {
       setLoading(false);
     }
+  }
+
+  function openMap(lat, lng, name) {
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    Linking.openURL(url);
+  }
+
+  function formatLocationTime(ts) {
+    if (!ts) return 'Never';
+    const d = new Date(ts);
+    const now = new Date();
+    const diffMin = Math.round((now - d) / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    return d.toLocaleDateString();
   }
 
   function resetForm() {
@@ -180,6 +200,35 @@ export default function AdminScreen() {
           </View>
         </View>
       )}
+
+      {/* Agent Locations */}
+      <Text style={styles.sectionTitle}>Agent Locations</Text>
+      {locations.map((agent) => (
+        <View key={agent.id} style={styles.locationCard}>
+          <View style={styles.locationInfo}>
+            <View style={styles.locationDot(!!agent.latitude)} />
+            <View>
+              <Text style={styles.locationName}>{agent.full_name}</Text>
+              <Text style={styles.locationSub}>
+                {agent.latitude
+                  ? `${parseFloat(agent.latitude).toFixed(5)}, ${parseFloat(agent.longitude).toFixed(5)}`
+                  : 'No location yet'}
+              </Text>
+              <Text style={styles.locationTime}>
+                Updated: {formatLocationTime(agent.location_updated_at)}
+              </Text>
+            </View>
+          </View>
+          {agent.latitude ? (
+            <TouchableOpacity
+              style={styles.mapBtn}
+              onPress={() => openMap(agent.latitude, agent.longitude, agent.full_name)}
+            >
+              <Text style={styles.mapBtnText}>Map</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ))}
 
       {/* Team Stats Dashboard */}
       <Text style={styles.sectionTitle}>Today's Performance</Text>
@@ -412,5 +461,52 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '500',
+  },
+  locationCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  locationDot: (active) => ({
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: active ? '#22c55e' : '#475569',
+    marginRight: 12,
+  }),
+  locationName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  locationSub: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  locationTime: {
+    color: '#475569',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  mapBtn: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  mapBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

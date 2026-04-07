@@ -49,6 +49,11 @@ async function migrate() {
   `;
   console.log('  ✓ contacts table');
 
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude FLOAT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude FLOAT`;
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMP`;
+  console.log('  ✓ users location columns');
+
   console.log('Migrations complete.');
 }
 

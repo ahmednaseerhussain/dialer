@@ -9,6 +9,7 @@ const twimlRoutes = require('./routes/twiml');
 const callRoutes = require('./routes/calls');
 const contactRoutes = require('./routes/contacts');
 const adminRoutes = require('./routes/admin');
+const locationRoutes = require('./routes/location');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/twiml', twimlRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/location', locationRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
