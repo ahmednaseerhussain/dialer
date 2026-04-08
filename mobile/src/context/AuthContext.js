@@ -16,31 +16,44 @@ export function AuthProvider({ children }) {
   }, []);
 
   function startLocationTracking() {
-    // Request permission once, then start 30s interval
-    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+    Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
       if (status !== 'granted') return;
-      // Send immediately on start
-      sendLocation();
-      locationInterval.current = setInterval(sendLocation, 30000);
+
+      // Send last known position instantly (no GPS wait needed)
+      try {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 300000 });
+        if (last) {
+          api.post('/api/location', {
+            lat: last.coords.latitude,
+            lng: last.coords.longitude,
+          }).catch(() => {});
+        }
+      } catch {}
+
+      // Watch for live position updates every 30s or when moved 50m
+      try {
+        const sub = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 30000,
+            distanceInterval: 50,
+          },
+          (loc) => {
+            api.post('/api/location', {
+              lat: loc.coords.latitude,
+              lng: loc.coords.longitude,
+            }).catch(() => {});
+          }
+        );
+        locationInterval.current = sub;
+      } catch {}
     });
   }
 
   function stopLocationTracking() {
     if (locationInterval.current) {
-      clearInterval(locationInterval.current);
+      locationInterval.current.remove();
       locationInterval.current = null;
-    }
-  }
-
-  async function sendLocation() {
-    try {
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      await api.post('/api/location', {
-        lat: loc.coords.latitude,
-        lng: loc.coords.longitude,
-      });
-    } catch {
-      // Silent fail — location is best-effort
     }
   }
 
