@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { Alert, Linking } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import api from '../services/api';
@@ -17,7 +18,17 @@ export function AuthProvider({ children }) {
 
   function startLocationTracking() {
     Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
-      if (status !== 'granted') return;
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please enable location access in Settings so your location can be tracked.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
 
       // Send last known position instantly (no GPS wait needed)
       try {

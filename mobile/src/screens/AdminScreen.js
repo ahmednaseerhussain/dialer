@@ -202,7 +202,17 @@ export default function AdminScreen() {
       )}
 
       {/* Agent Locations */}
-      <Text style={styles.sectionTitle}>Agent Locations</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Agent Locations</Text>
+        <TouchableOpacity onPress={async () => {
+          try {
+            const locRes = await api.get('/api/location');
+            setLocations(locRes.data.locations);
+          } catch {}
+        }}>
+          <Text style={styles.refreshBtn}>↻ Refresh</Text>
+        </TouchableOpacity>
+      </View>
       {locations.map((agent) => (
         <View key={agent.id} style={styles.locationCard}>
           <View style={styles.locationInfo}>
@@ -374,13 +384,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
   sectionTitle: {
     color: '#94a3b8',
     fontSize: 14,
     fontWeight: '600',
     textTransform: 'uppercase',
-    marginBottom: 12,
-    marginTop: 8,
+  },
+  refreshBtn: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: '600',
   },
   statsCard: {
     backgroundColor: '#1e293b',
