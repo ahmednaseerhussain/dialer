@@ -5,83 +5,28 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
-let InCallManager;
-try {
-  InCallManager = require('react-native-incall-manager').default;
-} catch {
-  InCallManager = null;
-}
-
 export default function IncomingCallScreen() {
   const navigation = useNavigation();
-  const { incomingInvite, callState } = useCall();
+  const { incomingInvite } = useCall();
   const { acceptIncoming, rejectIncoming } = useTwilioVoice();
 
-  // Start ringing + vibration
   React.useEffect(() => {
-    console.log('[IncomingCall] Screen mounted, starting ring');
     Vibration.vibrate([0, 500, 200, 500], true);
-    if (InCallManager) {
-      try { InCallManager.startRingtone('_DEFAULT_'); } catch (e) {}
-    }
-    return () => {
-      console.log('[IncomingCall] Screen unmounting, stopping ring');
-      Vibration.cancel();
-      if (InCallManager) {
-        try { InCallManager.stopRingtone(); } catch (e) {}
-      }
-    };
+    return () => Vibration.cancel();
   }, []);
 
-  // If invite gets cancelled (caller hung up), go back
-  React.useEffect(() => {
-    if (!incomingInvite) {
-      console.log('[IncomingCall] Invite cleared, going back');
-      Vibration.cancel();
-      if (InCallManager) {
-        try { InCallManager.stopRingtone(); } catch (e) {}
-      }
-      navigation.goBack();
-    }
-  }, [incomingInvite]);
-
-  // If call is now connecting/connected (accepted), navigate to ActiveCall
-  React.useEffect(() => {
-    if (callState === 'connecting' || callState === 'connected') {
-      Vibration.cancel();
-      if (InCallManager) {
-        try { InCallManager.stopRingtone(); } catch (e) {}
-      }
-      navigation.replace('ActiveCall');
-    }
-  }, [callState]);
-
   async function handleAccept() {
-    console.log('[IncomingCall] Accept pressed');
-    Vibration.cancel();
-    if (InCallManager) {
-      try { InCallManager.stopRingtone(); } catch (e) {}
-    }
     if (incomingInvite) {
-      try {
-        await acceptIncoming(incomingInvite);
-      } catch (err) {
-        console.error('[IncomingCall] Accept failed:', err);
-        navigation.goBack();
-      }
+      await acceptIncoming(incomingInvite);
+      navigation.replace('ActiveCall');
     }
   }
 
   async function handleReject() {
-    console.log('[IncomingCall] Reject pressed');
-    Vibration.cancel();
-    if (InCallManager) {
-      try { InCallManager.stopRingtone(); } catch (e) {}
-    }
     if (incomingInvite) {
       await rejectIncoming(incomingInvite);
+      navigation.goBack();
     }
-    navigation.goBack();
   }
 
   return (

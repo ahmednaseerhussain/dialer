@@ -181,7 +181,7 @@ export default function ContactDetailScreen() {
             <View key={c.id} style={styles.historyItem}>
               <View style={styles.historyIconWrap}>
                 <Ionicons
-                  name={c.direction === 'outbound' ? 'arrow-redo' : 'arrow-undo'}
+                  name={c.direction === 'outbound' ? 'arrow-up-forward' : 'arrow-down-back'}
                   size={16}
                   color={c.direction === 'outbound' ? '#3b82f6' : '#22c55e'}
                 />

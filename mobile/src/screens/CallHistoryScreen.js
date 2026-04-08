@@ -83,7 +83,7 @@ export default function CallHistoryScreen() {
       >
         <View style={styles.directionIconWrap}>
           <Ionicons
-            name={isOutbound ? 'arrow-redo' : item.status === 'no-answer' ? 'call-outline' : 'arrow-undo'}
+            name={isOutbound ? 'arrow-up-forward' : item.status === 'no-answer' ? 'call-outline' : 'arrow-down-back'}
             size={18}
             color={isOutbound ? '#3b82f6' : item.status === 'no-answer' ? '#f59e0b' : '#22c55e'}
           />
