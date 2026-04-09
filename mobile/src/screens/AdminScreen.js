@@ -26,14 +26,15 @@ export default function AdminScreen() {
   async function loadData() {
     setLoading(true);
     try {
-      const [usersRes, statsRes, locRes] = await Promise.all([
+      const [usersRes, statsRes, locRes] = await Promise.allSettled([
         api.get('/api/admin/users'),
         api.get('/api/admin/stats'),
         api.get('/api/location'),
       ]);
-      setUsers(usersRes.data.users);
-      setStats(statsRes.data.stats);
-      setLocations(locRes.data.locations);
+      if (usersRes.status === 'fulfilled') setUsers(usersRes.value.data.users);
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data.stats);
+      if (locRes.status === 'fulfilled') setLocations(locRes.value.data.locations || []);
+      else console.warn('Failed to load locations:', locRes.reason?.message);
     } catch (err) {
       Alert.alert('Error', 'Failed to load admin data');
     } finally {
@@ -207,8 +208,10 @@ export default function AdminScreen() {
         <TouchableOpacity onPress={async () => {
           try {
             const locRes = await api.get('/api/location');
-            setLocations(locRes.data.locations);
-          } catch {}
+            setLocations(locRes.data.locations || []);
+          } catch (err) {
+            console.warn('Refresh locations failed:', err?.message);
+          }
         }}>
           <Text style={styles.refreshBtn}>↻ Refresh</Text>
         </TouchableOpacity>

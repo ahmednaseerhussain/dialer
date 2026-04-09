@@ -16,8 +16,9 @@ export function AuthProvider({ children }) {
     loadStoredAuth();
   }, []);
 
-  function startLocationTracking() {
-    Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
+  async function startLocationTracking() {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
           'Location Permission Required',
@@ -37,9 +38,11 @@ export function AuthProvider({ children }) {
           api.post('/api/location', {
             lat: last.coords.latitude,
             lng: last.coords.longitude,
-          }).catch(() => {});
+          }).catch((err) => console.warn('Location post failed:', err?.message));
         }
-      } catch {}
+      } catch (err) {
+        console.warn('getLastKnownPosition failed:', err?.message);
+      }
 
       // Watch for live position updates every 30s or when moved 50m
       try {
@@ -53,12 +56,16 @@ export function AuthProvider({ children }) {
             api.post('/api/location', {
               lat: loc.coords.latitude,
               lng: loc.coords.longitude,
-            }).catch(() => {});
+            }).catch((err) => console.warn('Location update failed:', err?.message));
           }
         );
         locationInterval.current = sub;
-      } catch {}
-    });
+      } catch (err) {
+        console.warn('watchPositionAsync failed:', err?.message);
+      }
+    } catch (err) {
+      console.warn('Location tracking init failed:', err?.message);
+    }
   }
 
   function stopLocationTracking() {
