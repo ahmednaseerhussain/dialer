@@ -25,6 +25,15 @@ export default function DialerScreen() {
   const [number, setNumber] = useState('');
   const [recentCalls, setRecentCalls] = useState([]);
 
+  // Register device for incoming calls via FCM push notifications
+  useEffect(() => {
+    if (isAvailable) {
+      register().then((token) => {
+        if (token) console.log('Twilio Voice registered for incoming calls');
+      });
+    }
+  }, [isAvailable]);
+
   useEffect(() => {
     loadRecentCalls();
   }, []);

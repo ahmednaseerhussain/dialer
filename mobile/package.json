@@ -16,6 +16,7 @@
     "@twilio/voice-react-native-sdk": "^1.7.0",
     "axios": "^1.7.9",
     "expo": "~55.0.6",
+    "expo-location": "~55.1.8",
     "expo-secure-store": "~55.0.8",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",

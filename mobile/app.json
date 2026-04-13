@@ -29,7 +29,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "./plugins/withTwilioVoice"
+      "./plugins/withTwilioVoice",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Kraydl Dialer to use your location to track agent position.",
+          "locationAlwaysPermission": "Allow Kraydl Dialer to use your location in the background.",
+          "locationWhenInUsePermission": "Allow Kraydl Dialer to use your location while using the app."
+        }
+      ]
     ]
   }
 }
