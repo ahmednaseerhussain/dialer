@@ -1,12 +1,13 @@
 import React from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CallProvider } from './src/context/CallContext';
+import VoiceBootstrap from './src/components/VoiceBootstrap';
 
 import LoginScreen from './src/screens/LoginScreen';
 import DialerScreen from './src/screens/DialerScreen';
@@ -108,11 +109,14 @@ function AppNavigator() {
   );
 }
 
+const navigationRef = createNavigationContainerRef();
+
 export default function App() {
   return (
     <AuthProvider>
       <CallProvider>
-        <NavigationContainer>
+        <VoiceBootstrap navigationRef={navigationRef} />
+        <NavigationContainer ref={navigationRef}>
           <AppNavigator />
         </NavigationContainer>
       </CallProvider>

@@ -167,4 +167,104 @@ router.get('/calls', async (req, res) => {
   }
 });
 
+// Twilio configuration diagnostics — verifies TwiML App + Push Credential point at this server
+router.get('/twilio-check', async (req, res) => {
+  try {
+    const twilio = require('twilio');
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+    const externalBase = (process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    const expectedVoiceUrl = `${externalBase}/api/twiml/voice`;
+
+    const result = {
+      env: {
+        RENDER_EXTERNAL_URL: process.env.RENDER_EXTERNAL_URL || null,
+        TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ? 'set' : 'MISSING',
+        TWILIO_API_KEY: process.env.TWILIO_API_KEY ? 'set' : 'MISSING',
+        TWILIO_API_SECRET: process.env.TWILIO_API_SECRET ? 'set' : 'MISSING',
+        TWILIO_TWIML_APP_SID: process.env.TWILIO_TWIML_APP_SID || 'MISSING',
+        TWILIO_PUSH_CREDENTIAL_SID: process.env.TWILIO_PUSH_CREDENTIAL_SID || 'MISSING',
+        TWILIO_DEFAULT_CALLER_ID: process.env.TWILIO_DEFAULT_CALLER_ID || null,
+        TWILIO_SKIP_VALIDATION: process.env.TWILIO_SKIP_VALIDATION || 'false',
+      },
+      expectedVoiceUrl,
+      twimlApp: null,
+      pushCredential: null,
+      account: null,
+      issues: [],
+    };
+
+    // Account status — trial accounts can only call verified numbers (gives 31603)
+    try {
+      const acct = await client.api.v2010.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
+      result.account = { friendlyName: acct.friendlyName, status: acct.status, type: acct.type };
+      if (acct.type === 'Trial') {
+        result.issues.push('Account is in TRIAL mode — outbound calls to UNVERIFIED numbers will be declined with 31603. Verify the destination number in Twilio Console → Phone Numbers → Verified Caller IDs, or upgrade the account.');
+      }
+    } catch (e) {
+      result.issues.push(`Account fetch failed: ${e.message}`);
+    }
+
+    // TwiML App
+    if (process.env.TWILIO_TWIML_APP_SID) {
+      try {
+        const app = await client.applications(process.env.TWILIO_TWIML_APP_SID).fetch();
+        result.twimlApp = {
+          friendlyName: app.friendlyName,
+          voiceUrl: app.voiceUrl,
+          voiceMethod: app.voiceMethod,
+          statusCallback: app.statusCallback,
+        };
+        if (app.voiceUrl !== expectedVoiceUrl) {
+          result.issues.push(`TwiML App voiceUrl is "${app.voiceUrl}" but should be "${expectedVoiceUrl}". Outbound calls will fail with 31603. Update it in Twilio Console → Voice → TwiML → TwiML Apps.`);
+        }
+        if ((app.voiceMethod || '').toUpperCase() !== 'POST') {
+          result.issues.push(`TwiML App voiceMethod is "${app.voiceMethod}" but should be POST.`);
+        }
+      } catch (e) {
+        result.issues.push(`TwiML App fetch failed: ${e.message}`);
+      }
+    }
+
+    // Push credential — Voice push credentials live under /chat/v2/Credentials
+    if (process.env.TWILIO_PUSH_CREDENTIAL_SID) {
+      try {
+        const credUrl = `https://chat.twilio.com/v2/Credentials/${process.env.TWILIO_PUSH_CREDENTIAL_SID}`;
+        const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        const r = await fetch(credUrl, { headers: { Authorization: `Basic ${auth}` } });
+        const text = await r.text();
+        if (r.ok) {
+          const data = JSON.parse(text);
+          result.pushCredential = {
+            friendlyName: data.friendly_name,
+            type: data.type,
+            sandbox: data.sandbox,
+          };
+          if (data.type !== 'fcm' && data.type !== 'apn') {
+            result.issues.push(`Push credential type is "${data.type}" — for Android it should be "fcm".`);
+          }
+        } else {
+          result.issues.push(`Push credential lookup returned ${r.status}: ${text.slice(0, 200)}`);
+        }
+      } catch (e) {
+        result.issues.push(`Push credential fetch failed: ${e.message}`);
+      }
+    }
+
+    // Caller ID for the requesting admin
+    const me = await sql`SELECT username, twilio_number FROM users WHERE id = ${req.user.id}`;
+    if (me.length) {
+      result.user = me[0];
+      if (!me[0].twilio_number && !process.env.TWILIO_DEFAULT_CALLER_ID) {
+        result.issues.push(`User "${me[0].username}" has no twilio_number and TWILIO_DEFAULT_CALLER_ID is not set. Outbound calls will fail. Assign a Twilio number in Admin → Users.`);
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Twilio check error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

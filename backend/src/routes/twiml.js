@@ -5,49 +5,90 @@ const { twilioWebhookMiddleware } = require('../middleware/twilioValidation');
 
 const router = express.Router();
 
+function publicBaseUrl(req) {
+  // Prefer the explicit external URL (Render), fall back to the request host
+  const env = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_BASE_URL;
+  if (env) return env.replace(/\/$/, '');
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`;
+}
+
 // Outbound call — TwiML App Voice URL
 router.post('/voice', twilioWebhookMiddleware, async (req, res) => {
   try {
     const twiml = new VoiceResponse();
     const to = req.body.To;
     const identity = req.body.From?.replace('client:', '');
+    const base = publicBaseUrl(req);
+
+    console.log('[twiml /voice] CallSid=%s From=%s To=%s identity=%s',
+      req.body.CallSid, req.body.From, to, identity);
 
     if (!to) {
+      console.warn('[twiml /voice] missing To param');
       twiml.say('No destination number provided.');
       return res.type('text/xml').send(twiml.toString());
     }
 
     // If dialing a phone number (not a client)
     if (to.startsWith('+')) {
-      // Look up agent's Twilio number for CallerID
-      const rows = await sql`SELECT twilio_number FROM users WHERE username = ${identity}`;
-      const callerId = rows.length ? rows[0].twilio_number : undefined;
-
-      if (!callerId) {
-        twiml.say('No Twilio number assigned to your account.');
+      // E.164 validation — must be + followed by 8–15 digits
+      if (!/^\+\d{8,15}$/.test(to)) {
+        console.warn('[twiml /voice] invalid E.164 number: %s', to);
+        twiml.say('The number you dialed is not valid. Please check the number and try again.');
         return res.type('text/xml').send(twiml.toString());
       }
+      // Look up agent's Twilio number for CallerID, with env fallback for testing
+      let callerId;
+      if (identity) {
+        const rows = await sql`SELECT twilio_number FROM users WHERE username = ${identity}`;
+        callerId = rows.length ? rows[0].twilio_number : null;
+      }
+      if (!callerId) {
+        callerId = process.env.TWILIO_DEFAULT_CALLER_ID || null;
+        if (callerId) {
+          console.warn('[twiml /voice] using TWILIO_DEFAULT_CALLER_ID fallback for %s', identity);
+        }
+      }
+
+      if (!callerId) {
+        console.error('[twiml /voice] no callerId for identity=%s — set users.twilio_number or TWILIO_DEFAULT_CALLER_ID', identity);
+        twiml.say('No Twilio number assigned to your account. Please contact your administrator.');
+        return res.type('text/xml').send(twiml.toString());
+      }
+
+      console.log('[twiml /voice] dialing %s from callerId=%s', to, callerId);
 
       const dial = twiml.dial({
         callerId,
         record: 'record-from-ringing',
-        recordingStatusCallback: '/api/twiml/status',
+        recordingStatusCallback: `${base}/api/twiml/status`,
+        recordingStatusCallbackMethod: 'POST',
+        action: `${base}/api/twiml/status`,
+        method: 'POST',
+        answerOnBridge: true,
+        timeout: 30,
       });
       dial.number(to);
 
       // Log the outbound call
-      await sql`
-        INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
-        SELECT u.id, ${req.body.CallSid}, 'outbound', ${callerId}, ${to}, 'initiated'
-        FROM users u WHERE u.username = ${identity}
-      `;
+      if (identity) {
+        await sql`
+          INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
+          SELECT u.id, ${req.body.CallSid}, 'outbound', ${callerId}, ${to}, 'initiated'
+          FROM users u WHERE u.username = ${identity}
+          ON CONFLICT (call_sid) DO NOTHING
+        `;
+      }
     } else {
       // Client-to-client call
       const dial = twiml.dial();
       dial.client(to);
     }
 
-    res.type('text/xml').send(twiml.toString());
+    const xml = twiml.toString();
+    console.log('[twiml /voice] response:', xml);
+    res.type('text/xml').send(xml);
   } catch (err) {
     console.error('TwiML voice error:', err);
     const twiml = new VoiceResponse();
@@ -61,6 +102,7 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
   try {
     const twiml = new VoiceResponse();
     const inboundNumber = req.params.number;
+    const base = publicBaseUrl(req);
 
     const rows = await sql`SELECT id, username FROM users WHERE twilio_number = ${inboundNumber} AND is_active = true`;
 
@@ -69,7 +111,12 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
       return res.type('text/xml').send(twiml.toString());
     }
 
-    const dial = twiml.dial();
+    const dial = twiml.dial({
+      timeout: 25,
+      answerOnBridge: true,
+      action: `${base}/api/twiml/status`,
+      method: 'POST',
+    });
     // Ring all agents assigned to this number (handles multiple agents sharing a number)
     for (const agent of rows) {
       dial.client(agent.username);
@@ -81,6 +128,9 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
       INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
       VALUES (${agent.id}, ${req.body.CallSid}, 'inbound', ${req.body.From}, ${inboundNumber}, 'ringing')
     `;
+
+    // After dial completes (no answer / busy), say goodbye
+    twiml.say('The agent is unavailable right now. Please try again later.');
 
     res.type('text/xml').send(twiml.toString());
   } catch (err) {

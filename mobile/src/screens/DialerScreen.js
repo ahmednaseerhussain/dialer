@@ -21,18 +21,9 @@ export default function DialerScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { callState, incomingInvite } = useCall();
-  const { makeCall, register, isAvailable } = useTwilioVoice();
+  const { makeCall } = useTwilioVoice();
   const [number, setNumber] = useState('');
   const [recentCalls, setRecentCalls] = useState([]);
-
-  // Register device for incoming calls via FCM push notifications
-  useEffect(() => {
-    if (isAvailable) {
-      register().then((token) => {
-        if (token) console.log('Twilio Voice registered for incoming calls');
-      });
-    }
-  }, [isAvailable]);
 
   useEffect(() => {
     loadRecentCalls();
@@ -83,9 +74,20 @@ export default function DialerScreen() {
   }
 
   async function handleCall() {
-    const dialNumber = number.trim();
+    const dialNumber = number.trim().replace(/[^\d+]/g, '');
     if (!dialNumber) {
       Alert.alert('Error', 'Enter a number to call');
+      return;
+    }
+
+    // E.164 validation: + followed by 8–15 digits. Auto-add + if missing.
+    let formatted = dialNumber.startsWith('+') ? dialNumber : `+${dialNumber}`;
+    const digitsOnly = formatted.slice(1);
+    if (!/^\d{8,15}$/.test(digitsOnly)) {
+      Alert.alert(
+        'Invalid Number',
+        `"${formatted}" is not a valid phone number.\n\nUse international format: country code + full number (e.g. +16812918224 for US).`
+      );
       return;
     }
 
@@ -95,8 +97,6 @@ export default function DialerScreen() {
       return;
     }
 
-    // Ensure E.164 format
-    const formatted = dialNumber.startsWith('+') ? dialNumber : `+${dialNumber}`;
     try {
       await makeCall(formatted);
     } catch (err) {
