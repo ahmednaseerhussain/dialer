@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import api from '../services/api';
 
@@ -18,6 +19,9 @@ function normalizeNumber(raw) {
 export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  // Edge-to-edge display: without this the input row sits behind the
+  // Android system navigation bar.
+  const insets = useSafeAreaInsets();
 
   // Compose mode when opened without a number (from the FAB)
   const [number, setNumber] = useState(route.params?.number || null);
@@ -147,7 +151,7 @@ export default function ChatScreen() {
       />
 
       {/* Input row */}
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: 10 + insets.bottom }]}>
         <TextInput
           style={styles.input}
           placeholder="Type a message…"

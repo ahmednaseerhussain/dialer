@@ -49,7 +49,8 @@ app.get('/health', async (req, res) => {
   } catch {
     db = 'error';
   }
-  res.json({ status: 'ok', db });
+  const fcm = require('./services/fcm');
+  res.json({ status: 'ok', db, push: fcm.isConfigured() });
 });
 
 const PORT = process.env.PORT || 3000;

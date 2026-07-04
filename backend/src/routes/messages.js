@@ -38,6 +38,7 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
   try {
     const inboundNumber = req.params.number;
     const { MessageSid, From, Body } = req.body;
+    console.log('[messages /inbound] MessageSid=%s From=%s number=%s', MessageSid, From, inboundNumber);
     if (!MessageSid || !From) return;
 
     const rows = await sql`
@@ -57,9 +58,13 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
 
     // Push notification to the agent's devices (skip Twilio webhook retries
     // that hit the ON CONFLICT path — they were already notified).
+    if (!fcm.isConfigured()) {
+      console.warn('[messages /inbound] push skipped — FIREBASE_SERVICE_ACCOUNT not configured');
+    }
     if (inserted.length && fcm.isConfigured()) {
       try {
         const tokenRows = await sql`SELECT token FROM device_tokens WHERE user_id = ${rows[0].id}`;
+        console.log('[messages /inbound] pushing to %d device(s) for agent %d', tokenRows.length, rows[0].id);
         if (tokenRows.length) {
           const contactRows = await sql`
             SELECT name FROM contacts WHERE phone = ${From} AND name IS NOT NULL AND name <> '' LIMIT 1
@@ -73,6 +78,7 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
               body: (Body || '').slice(0, 240),
             }
           );
+          console.log('[messages /inbound] push done — %d dead token(s)', dead.length);
           for (const deadToken of dead) {
             await sql`DELETE FROM device_tokens WHERE token = ${deadToken}`;
           }

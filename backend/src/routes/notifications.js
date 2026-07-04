@@ -1,10 +1,47 @@
 const express = require('express');
 const sql = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const fcm = require('../services/fcm');
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+// End-to-end FCM test: sends a fake SMS push to the caller's registered
+// devices and reports exactly what happened — verifies the Firebase key,
+// device tokens, and the phone's notification handling in isolation.
+router.post('/test', async (req, res) => {
+  try {
+    if (!fcm.isConfigured()) {
+      return res.json({ ok: false, reason: 'FIREBASE_SERVICE_ACCOUNT not set or invalid on the server' });
+    }
+    const tokenRows = await sql`SELECT token FROM device_tokens WHERE user_id = ${req.user.id}`;
+    if (!tokenRows.length) {
+      return res.json({ ok: false, reason: 'No device tokens registered for this user — open the app and log in first' });
+    }
+    const dead = await fcm.sendToTokens(
+      tokenRows.map((r) => r.token),
+      {
+        type: 'sms',
+        number: '+10000000000',
+        name: 'Push Test',
+        body: `Test notification — ${new Date().toISOString()}`,
+      }
+    );
+    for (const deadToken of dead) {
+      await sql`DELETE FROM device_tokens WHERE token = ${deadToken}`;
+    }
+    res.json({
+      ok: true,
+      devices: tokenRows.length,
+      delivered: tokenRows.length - dead.length,
+      deadTokensRemoved: dead.length,
+    });
+  } catch (err) {
+    console.error('Push test error:', err);
+    res.status(500).json({ ok: false, reason: err.message });
+  }
+});
 
 // Register (or re-assign) this device's FCM token to the logged-in agent.
 // A token is unique per device — if another account logs in on the same

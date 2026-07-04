@@ -129,6 +129,9 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
 
     const rows = await sql`SELECT id, username FROM users WHERE twilio_number = ${inboundNumber} AND is_active = true`;
 
+    console.log('[twiml /inbound] CallSid=%s From=%s number=%s agents=%s',
+      req.body.CallSid, req.body.From, inboundNumber, rows.map((r) => r.username).join(',') || 'NONE');
+
     if (!rows.length) {
       twiml.say('This number is not currently assigned to an agent. Please try again later.');
       return res.type('text/xml').send(twiml.toString());
