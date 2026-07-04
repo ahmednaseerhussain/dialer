@@ -66,8 +66,8 @@ export default function CallHistoryScreen() {
             return;
           }
           try {
+            // VoiceBootstrap navigates to ActiveCall off call state
             await makeCall(number);
-            navigation.navigate('ActiveCall');
           } catch (err) {
             Alert.alert('Call Failed', err?.message || 'Could not place call');
           }

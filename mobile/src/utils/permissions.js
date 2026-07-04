@@ -31,9 +31,24 @@ export async function ensureMicPermission() {
     PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
     {
       title: 'Microphone Permission',
-      message: 'Kraydl Dialer needs microphone access to make calls.',
+      message: 'Kraydl Dialer needs microphone access to make and receive calls.',
       buttonPositive: 'Allow',
     }
   );
   return granted === PermissionsAndroid.RESULTS.GRANTED;
+}
+
+// Requests every runtime permission the app needs, ONE AT A TIME. Android
+// shows a single permission dialog at a time and silently auto-denies any
+// request fired while another is open, so these MUST run in sequence.
+//
+// Microphone is mandatory even for agents who only RECEIVE calls: the Twilio
+// Voice Android SDK refuses to display an incoming call without RECORD_AUDIO
+// ("Incoming call cannot be handled, microphone permission not granted") and
+// drops it silently. Requesting mic only on outbound calls (the old behavior)
+// meant a fresh install never rang for incoming calls.
+export async function requestStartupPermissions() {
+  const notifications = await requestNotificationPermission();
+  const microphone = await ensureMicPermission();
+  return { notifications, microphone };
 }

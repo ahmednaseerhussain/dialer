@@ -108,6 +108,29 @@ export function isVoiceAvailable() {
   return !!Voice;
 }
 
+// Recover an invite the JS layer may have missed. On a cold start from a
+// notification tap (app was killed), the native `callInvite` event can fire
+// before JS attaches its listener, so the invite is never surfaced and the
+// app just opens to its normal screen. Querying the SDK for still-pending
+// invites and replaying the first one through the same handler fixes that.
+export async function recoverPendingInvite() {
+  const voice = getVoice();
+  if (!voice?.getCallInvites) return null;
+  try {
+    const invites = await voice.getCallInvites();
+    const first = invites && invites.size ? Array.from(invites.values())[0] : null;
+    if (first) {
+      console.log('[voice] recovered pending invite from', first?.getFrom?.() || first?.from);
+      wireInvite(first);
+      handlers.onCallInvite && handlers.onCallInvite(first);
+      return first;
+    }
+  } catch (e) {
+    console.warn('[voice] recoverPendingInvite failed:', e?.message || e);
+  }
+  return null;
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Register this device for incoming calls. Retries because the backend

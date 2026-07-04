@@ -20,7 +20,7 @@ const KEYPAD = [
 export default function DialerScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { callState, incomingInvite } = useCall();
+  const { callState } = useCall();
   const { makeCall } = useTwilioVoice();
   const [number, setNumber] = useState('');
   const [recentCalls, setRecentCalls] = useState([]);
@@ -33,19 +33,8 @@ export default function DialerScreen() {
     }, [])
   );
 
-  // Navigate to incoming call screen when invite arrives
-  React.useEffect(() => {
-    if (incomingInvite) {
-      navigation.navigate('IncomingCall');
-    }
-  }, [incomingInvite]);
-
-  // Navigate to active call screen when call connects
-  React.useEffect(() => {
-    if (callState === 'connecting' || callState === 'connected') {
-      navigation.navigate('ActiveCall');
-    }
-  }, [callState]);
+  // Call-screen navigation is centralized in VoiceBootstrap (single owner) so
+  // it can also reliably POP the screen when a call ends. Nothing to do here.
 
   async function loadRecentCalls() {
     try {

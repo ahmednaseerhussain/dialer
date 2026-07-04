@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
@@ -19,7 +18,6 @@ function getInviteFrom(invite) {
 }
 
 export default function IncomingCallScreen() {
-  const navigation = useNavigation();
   const { incomingInvite } = useCall();
   const { acceptIncoming, rejectIncoming } = useTwilioVoice();
   const busyRef = React.useRef(false);
@@ -42,14 +40,10 @@ export default function IncomingCallScreen() {
     };
   }, []);
 
-  // If the invite gets cancelled (caller hangs up) or accepted via the
-  // native notification while we're still here, leave the screen.
-  React.useEffect(() => {
-    if (!incomingInvite) {
-      navigation.canGoBack() && navigation.goBack();
-    }
-  }, [incomingInvite, navigation]);
-
+  // Screen open/close is driven by VoiceBootstrap from call state (single
+  // owner). Accepting moves state to a call → it swaps in ActiveCall;
+  // rejecting/cancelling clears the invite → it pops this screen. So the
+  // handlers here only need to act on the call, not navigate.
   async function handleAccept() {
     if (!incomingInvite || busyRef.current) return;
     busyRef.current = true;
@@ -57,25 +51,19 @@ export default function IncomingCallScreen() {
     if (InCallManager) { try { InCallManager.stopRingtone(); } catch {} }
     try {
       await acceptIncoming(incomingInvite);
-      navigation.replace('ActiveCall');
     } catch (err) {
       console.error('Accept failed:', err);
       busyRef.current = false;
-      navigation.canGoBack() && navigation.goBack();
     }
   }
 
   async function handleReject() {
     if (busyRef.current) return;
-    if (!incomingInvite) {
-      navigation.canGoBack() && navigation.goBack();
-      return;
-    }
     busyRef.current = true;
     try {
-      await rejectIncoming(incomingInvite);
-    } finally {
-      navigation.canGoBack() && navigation.goBack();
+      if (incomingInvite) await rejectIncoming(incomingInvite);
+    } catch (err) {
+      console.error('Reject failed:', err);
     }
   }
 

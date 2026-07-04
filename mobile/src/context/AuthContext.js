@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import api, { setOnAuthExpired } from '../services/api';
 import { unregisterVoice } from '../services/voice';
 import { removeDeviceToken } from '../services/pushToken';
-import { requestNotificationPermission } from '../utils/permissions';
+import { requestStartupPermissions } from '../utils/permissions';
 
 const AuthContext = createContext(null);
 
@@ -29,10 +29,22 @@ export function AuthProvider({ children }) {
 
   async function startLocationTracking() {
     try {
-      // Notification permission FIRST — Android shows one dialog at a time,
-      // and firing the location request in parallel used to swallow the
-      // notification dialog entirely (calls/SMS then arrive silently muted).
-      await requestNotificationPermission();
+      // Call/notification permissions FIRST, one at a time — Android shows a
+      // single dialog at a time, so requesting location in parallel used to
+      // swallow the others (notification + mic). Mic is required for the
+      // Twilio SDK to even SHOW an incoming call, so receive-only agents
+      // need it too — not just when placing an outbound call.
+      const perms = await requestStartupPermissions();
+      if (!perms.microphone) {
+        Alert.alert(
+          'Microphone Permission Required',
+          'Without microphone access the app cannot ring for incoming calls. Please enable it in Settings.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(

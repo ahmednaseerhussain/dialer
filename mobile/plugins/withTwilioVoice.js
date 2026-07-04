@@ -178,6 +178,45 @@ function withTwilioVoice(config) {
 
       fs.writeFileSync(mainAppPath, contents, 'utf8');
 
+      // MainActivity.kt — wire VoiceActivityProxy so incoming-call intents
+      // (notification tap / full-screen intent) reach VoiceService and the
+      // invite surfaces in JS. Without this, tapping the call notification
+      // just opens the app to its default screen with no Accept/Decline UI.
+      const mainActivityPath = path.join(javaDir, 'MainActivity.kt');
+      if (fs.existsSync(mainActivityPath)) {
+        let act = fs.readFileSync(mainActivityPath, 'utf8');
+
+        if (!act.includes('VoiceActivityProxy')) {
+          act = act.replace(
+            'import android.os.Bundle',
+            'import android.content.Intent\nimport android.os.Bundle'
+          );
+          act = act.replace(
+            /import com\.facebook\.react\.ReactActivity\n/,
+            'import com.facebook.react.ReactActivity\nimport com.twiliovoicereactnative.VoiceActivityProxy\n'
+          );
+          act = act.replace(
+            /class MainActivity : ReactActivity\(\) \{/,
+            'class MainActivity : ReactActivity() {\n  private lateinit var voiceActivityProxy: VoiceActivityProxy'
+          );
+          // Instantiate before super.onCreate, then forward the launch intent
+          act = act.replace(
+            /(override fun onCreate\(savedInstanceState: Bundle\?\) \{)/,
+            '$1\n    voiceActivityProxy = VoiceActivityProxy(this) { /* permission rationale handled in JS */ }'
+          );
+          act = act.replace(
+            /super\.onCreate\(null\)/,
+            'super.onCreate(null)\n    voiceActivityProxy.onCreate(savedInstanceState)'
+          );
+          // Add onNewIntent + onDestroy overrides after onCreate closes
+          act = act.replace(
+            /(override fun getMainComponentName\(\): String = "main")/,
+            'override fun onNewIntent(intent: Intent) {\n    super.onNewIntent(intent)\n    voiceActivityProxy.onNewIntent(intent)\n  }\n\n  override fun onDestroy() {\n    voiceActivityProxy.onDestroy()\n    super.onDestroy()\n  }\n\n  $1'
+          );
+          fs.writeFileSync(mainActivityPath, act, 'utf8');
+        }
+      }
+
       // twilio_config.xml — DISABLE Twilio's own Firebase messaging service;
       // AppFirebaseMessagingService (below) is the single FCM handler and
       // forwards Twilio Voice pushes to the SDK via super.
