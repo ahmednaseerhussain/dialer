@@ -1,30 +1,11 @@
-import { useEffect } from 'react';
-import { AppState, PermissionsAndroid, Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Alert, AppState } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 import { setVoiceHandlers, isVoiceAvailable, registerVoice } from '../services/voice';
 import { syncDeviceToken } from '../services/pushToken';
-
-async function requestNotificationPermission() {
-  if (Platform.OS !== 'android') return true;
-  if (Platform.Version < 33) return true; // Android < 13: granted at install
-  try {
-    const perm = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
-    if (!perm) return true;
-    const has = await PermissionsAndroid.check(perm);
-    if (has) return true;
-    const result = await PermissionsAndroid.request(perm, {
-      title: 'Notifications',
-      message: 'Allow notifications so you can be alerted to incoming calls.',
-      buttonPositive: 'Allow',
-    });
-    return result === PermissionsAndroid.RESULTS.GRANTED;
-  } catch (e) {
-    console.warn('POST_NOTIFICATIONS request failed:', e?.message || e);
-    return false;
-  }
-}
+import { requestNotificationPermission } from '../utils/permissions';
 
 // Wires the singleton Voice listeners to React state, registers the device
 // for incoming push notifications on login, and surfaces background-accepted
@@ -33,6 +14,7 @@ export default function VoiceBootstrap({ navigationRef }) {
   const { user } = useAuth();
   const { setIncomingInvite } = useCall();
   const { adoptCall } = useTwilioVoice();
+  const warnedRegisterFail = useRef(false);
 
   // Wire singleton handlers once
   useEffect(() => {
@@ -86,16 +68,46 @@ export default function VoiceBootstrap({ navigationRef }) {
   useEffect(() => {
     if (!user) return;
 
+    const registerAll = async ({ force = false } = {}) => {
+      // Registration first — it must never sit behind a permission dialog.
+      let voiceResult = { ok: false, error: 'not attempted' };
+      if (isVoiceAvailable()) {
+        voiceResult = await registerVoice({ force });
+        if (!voiceResult.ok && force) {
+          // One more try after a pause (cold backend), then tell the user —
+          // silent failure here means the phone simply never rings.
+          await new Promise((r) => setTimeout(r, 15000));
+          voiceResult = await registerVoice({ force: true });
+        }
+        if (!voiceResult.ok && !warnedRegisterFail.current) {
+          warnedRegisterFail.current = true;
+          Alert.alert(
+            'Incoming calls not ready',
+            `Device could not register for incoming calls: ${voiceResult.error || 'unknown error'}.\n\nCheck your internet and reopen the app.`
+          );
+        }
+        if (voiceResult.ok) warnedRegisterFail.current = false;
+      }
+      // Report voice status alongside the SMS-push token — shows up in
+      // server logs so "phone kyun nahi baja" is diagnosable remotely.
+      await syncDeviceToken({
+        force,
+        voiceRegistered: voiceResult.ok,
+        voiceError: voiceResult.ok ? undefined : voiceResult.error,
+      });
+    };
+
     (async () => {
+      await registerAll({ force: true });
+      // Permission dialog AFTER registration + after the location dialog
+      // (AuthContext sequences notification→location on login; this is a
+      // safety net for app restarts where login() didn't run).
       await requestNotificationPermission();
-      if (isVoiceAvailable()) await registerVoice({ force: true });
-      await syncDeviceToken({ force: true }); // SMS push for this device
     })();
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        if (isVoiceAvailable()) registerVoice().catch(() => {});
-        syncDeviceToken().catch(() => {});
+        registerAll().catch(() => {});
       }
     });
     return () => sub.remove();

@@ -163,7 +163,9 @@ export default function CallHistoryScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderCall}
         ListEmptyComponent={
-          !loading && (
+          loading ? (
+            <ActivityIndicator color="#3b82f6" size="large" style={{ marginTop: 60 }} />
+          ) : (
             <Text style={styles.emptyText}>No calls yet</Text>
           )
         }

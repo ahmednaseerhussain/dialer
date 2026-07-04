@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import api, { setOnAuthExpired } from '../services/api';
 import { unregisterVoice } from '../services/voice';
 import { removeDeviceToken } from '../services/pushToken';
+import { requestNotificationPermission } from '../utils/permissions';
 
 const AuthContext = createContext(null);
 
@@ -28,6 +29,10 @@ export function AuthProvider({ children }) {
 
   async function startLocationTracking() {
     try {
+      // Notification permission FIRST — Android shows one dialog at a time,
+      // and firing the location request in parallel used to swallow the
+      // notification dialog entirely (calls/SMS then arrive silently muted).
+      await requestNotificationPermission();
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(

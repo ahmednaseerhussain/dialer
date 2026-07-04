@@ -54,6 +54,14 @@ router.post('/device', async (req, res) => {
       return res.status(400).json({ error: 'token required' });
     }
 
+    // The app reports whether Twilio voice registration succeeded alongside
+    // its FCM token — makes "phone kyun nahi baja" diagnosable from logs.
+    if (req.body.voiceRegistered !== undefined) {
+      console.log('[notifications /device] user=%s voiceRegistered=%s%s',
+        req.user.username, req.body.voiceRegistered,
+        req.body.voiceError ? ` error="${String(req.body.voiceError).slice(0, 160)}"` : '');
+    }
+
     await sql`
       INSERT INTO device_tokens (user_id, token, platform, updated_at)
       VALUES (${req.user.id}, ${token}, ${platform}, NOW())

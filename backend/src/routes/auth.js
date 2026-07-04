@@ -37,10 +37,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // 7 days: an expiring session silently logs agents out mid-shift, which
+    // also tears down incoming-call registration — missed calls with no clue.
     const token = jwt.sign(
       { userId: user.id, username: user.username, isAdmin: user.is_admin },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '7d' }
     );
 
     res.json({

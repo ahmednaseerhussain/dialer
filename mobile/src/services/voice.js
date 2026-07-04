@@ -113,17 +113,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Register this device for incoming calls. Retries because the backend
 // (Render free tier) can cold-start slower than one request timeout —
 // a single silent failure here means this phone never rings.
+// Resolves to { ok, error } so callers can surface/report failures.
 export async function registerVoice({ force = false } = {}) {
   const voice = getVoice();
   if (!voice) {
     console.warn('[voice] SDK not available, skipping registration');
-    return false;
+    return { ok: false, error: 'voice SDK unavailable' };
   }
   if (registerInFlight) return registerInFlight;
-  if (!force && Date.now() - lastRegisterAt < 60 * 1000) return true;
+  if (!force && Date.now() - lastRegisterAt < 60 * 1000) return { ok: true };
 
   registerInFlight = (async () => {
     const delays = [0, 3000, 8000];
+    let lastError = null;
     for (let attempt = 0; attempt < delays.length; attempt += 1) {
       if (delays[attempt]) await sleep(delays[attempt]);
       try {
@@ -131,15 +133,13 @@ export async function registerVoice({ force = false } = {}) {
         await voice.register(data.token);
         wantRegistered = true;
         lastRegisterAt = Date.now();
-        return true;
+        return { ok: true };
       } catch (err) {
-        console.warn(
-          `[voice] registration attempt ${attempt + 1} failed:`,
-          err?.response?.data?.error || err?.message || err
-        );
+        lastError = err?.response?.data?.error || err?.message || String(err);
+        console.warn(`[voice] registration attempt ${attempt + 1} failed:`, lastError);
       }
     }
-    return false;
+    return { ok: false, error: lastError };
   })();
 
   try {

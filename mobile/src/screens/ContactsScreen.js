@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, Alert, RefreshControl, PermissionsAndroid, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,6 +22,7 @@ export default function ContactsScreen() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const loadContacts = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -31,6 +33,7 @@ export default function ContactsScreen() {
 
       const { data } = await api.get('/api/contacts', { params });
       setContacts(data.contacts);
+      setLoaded(true);
     } catch {}
     finally {
       setRefreshing(false);
@@ -135,7 +138,11 @@ export default function ContactsScreen() {
           />
         }
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No contacts found</Text>
+          loaded ? (
+            <Text style={styles.emptyText}>No contacts found</Text>
+          ) : (
+            <ActivityIndicator color="#3b82f6" size="large" style={{ marginTop: 60 }} />
+          )
         }
         renderItem={({ item }) => (
           <TouchableOpacity

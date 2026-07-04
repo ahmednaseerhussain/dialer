@@ -25,13 +25,19 @@ async function getFcmToken() {
 }
 
 // Register the token with the backend. Throttled — safe to call on every
-// app-foreground alongside the Twilio re-register.
-export async function syncDeviceToken({ force = false } = {}) {
+// app-foreground alongside the Twilio re-register. voiceRegistered/voiceError
+// piggyback the Twilio registration outcome for server-side visibility.
+export async function syncDeviceToken({ force = false, voiceRegistered, voiceError } = {}) {
   if (!force && Date.now() - lastSyncAt < 5 * 60 * 1000) return;
   const token = await getFcmToken();
   if (!token) return;
   try {
-    await api.post('/api/notifications/device', { token, platform: Platform.OS });
+    await api.post('/api/notifications/device', {
+      token,
+      platform: Platform.OS,
+      voiceRegistered,
+      voiceError,
+    });
     lastSyncedToken = token;
     lastSyncAt = Date.now();
   } catch (err) {

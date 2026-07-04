@@ -27,6 +27,7 @@ export default function ChatScreen() {
   const [number, setNumber] = useState(route.params?.number || null);
   const [toInput, setToInput] = useState('');
   const [messages, setMessages] = useState([]);
+  const [threadLoaded, setThreadLoaded] = useState(!route.params?.number);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const pollRef = useRef(null);
@@ -42,6 +43,7 @@ export default function ChatScreen() {
     try {
       const { data } = await api.get('/api/messages/thread', { params: { number: num } });
       setMessages(data.messages || []);
+      setThreadLoaded(true);
     } catch {}
   }, []);
 
@@ -144,7 +146,11 @@ export default function ChatScreen() {
         inverted={messages.length > 0}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          number ? null : (
+          number ? (
+            threadLoaded ? null : (
+              <ActivityIndicator color="#3b82f6" size="large" style={{ marginTop: 60 }} />
+            )
+          ) : (
             <Text style={styles.emptyHint}>Enter a number and write your message below</Text>
           )
         }

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -103,7 +104,9 @@ export default function MessagesScreen() {
               <Text style={styles.emptyText}>No messages yet</Text>
               <Text style={styles.emptyHint}>Tap the button below to start a conversation</Text>
             </View>
-          ) : null
+          ) : (
+            <ActivityIndicator color="#3b82f6" size="large" style={{ marginTop: 60 }} />
+          )
         }
         refreshControl={
           <RefreshControl
