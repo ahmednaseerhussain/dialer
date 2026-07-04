@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import api from '../services/api';
+import useTwilioVoice from '../hooks/useTwilioVoice';
+import { ensureMicPermission } from '../utils/permissions';
 
 const FILTERS = ['All', 'Outbound', 'Inbound'];
 
 export default function CallHistoryScreen() {
   const navigation = useNavigation();
+  const { makeCall } = useTwilioVoice();
   const [calls, setCalls] = useState([]);
   const [filter, setFilter] = useState('All');
   const [page, setPage] = useState(1);
@@ -41,9 +44,37 @@ export default function CallHistoryScreen() {
     }
   }, [filter]);
 
-  useEffect(() => {
-    loadCalls(1);
-  }, [loadCalls]);
+  // Refresh whenever the tab gains focus — tabs stay mounted, so a
+  // mount-only load meant calls made after first visit never showed up.
+  useFocusEffect(
+    useCallback(() => {
+      loadCalls(1);
+    }, [loadCalls])
+  );
+
+  async function redial(item) {
+    const number = item.direction === 'outbound' ? item.to_number : item.from_number;
+    if (!number) return;
+    Alert.alert('Call', number, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Call',
+        onPress: async () => {
+          const hasMic = await ensureMicPermission();
+          if (!hasMic) {
+            Alert.alert('Permission Required', 'Microphone permission is needed to make calls.');
+            return;
+          }
+          try {
+            await makeCall(number);
+            navigation.navigate('ActiveCall');
+          } catch (err) {
+            Alert.alert('Call Failed', err?.message || 'Could not place call');
+          }
+        },
+      },
+    ]);
+  }
 
   function formatDuration(sec) {
     if (!sec) return '0:00';
@@ -77,9 +108,7 @@ export default function CallHistoryScreen() {
     return (
       <TouchableOpacity
         style={styles.callItem}
-        onPress={() => {
-          // Could navigate to detail or redial
-        }}
+        onPress={() => redial(item)}
       >
         <View style={styles.directionIconWrap}>
           <Ionicons
@@ -98,6 +127,15 @@ export default function CallHistoryScreen() {
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
             {item.status || 'unknown'}
           </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.msgIconWrap}
+          onPress={() => displayNumber && navigation.navigate('Chat', { number: displayNumber })}
+        >
+          <Ionicons name="chatbubble" size={15} color="#3b82f6" />
+        </TouchableOpacity>
+        <View style={styles.redialIconWrap}>
+          <Ionicons name="call" size={16} color="#22c55e" />
         </View>
       </TouchableOpacity>
     );
@@ -211,6 +249,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+  redialIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  msgIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   statusText: {
     fontSize: 11,

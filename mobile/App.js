@@ -17,6 +17,8 @@ import CallHistoryScreen from './src/screens/CallHistoryScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import ContactDetailScreen from './src/screens/ContactDetailScreen';
 import AdminScreen from './src/screens/AdminScreen';
+import MessagesScreen from './src/screens/MessagesScreen';
+import ChatScreen from './src/screens/ChatScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -41,6 +43,7 @@ function MainTabs() {
           const icons = {
             Dialer: 'keypad',
             History: 'time',
+            Messages: 'chatbubbles',
             Contacts: 'people',
             Admin: 'settings',
           };
@@ -65,6 +68,11 @@ function MainTabs() {
         name="History"
         component={CallHistoryScreen}
         options={{ title: 'Call History', tabBarLabel: 'History' }}
+      />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{ title: 'Messages', tabBarLabel: 'Messages' }}
       />
       <Tab.Screen
         name="Contacts"
@@ -103,6 +111,7 @@ function AppNavigator() {
           <Stack.Screen name="ActiveCall" component={ActiveCallScreen} options={{ title: 'Active Call', headerBackVisible: false }} />
           <Stack.Screen name="IncomingCall" component={IncomingCallScreen} options={{ title: 'Incoming Call', headerShown: false, presentation: 'fullScreenModal' }} />
           <Stack.Screen name="ContactDetail" component={ContactDetailScreen} options={{ title: 'Contact' }} />
+          <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Message' }} />
         </>
       )}
     </Stack.Navigator>

@@ -14,6 +14,10 @@ export function CallProvider({ children }) {
   const timerRef = useRef(null);
 
   function startTimer() {
+    // Defensive: never let two intervals stack (duration would count 2x)
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
     setCallDuration(0);
     timerRef.current = setInterval(() => {
       setCallDuration((prev) => prev + 1);

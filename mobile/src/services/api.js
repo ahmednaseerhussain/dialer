@@ -19,12 +19,24 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Notify the app when the session dies (e.g. JWT expired after 8h) so the
+// UI can log out instead of sitting in a zombie state where every request
+// silently fails and incoming-call registration stops working.
+let onAuthExpired = null;
+export function setOnAuthExpired(fn) {
+  onAuthExpired = fn;
+}
+
 // Response interceptor — handle 401
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('authToken');
+      const isLoginAttempt = error.config?.url?.includes('/api/auth/login');
+      if (!isLoginAttempt) {
+        await SecureStore.deleteItemAsync('authToken');
+        if (onAuthExpired) onAuthExpired();
+      }
     }
     return Promise.reject(error);
   }

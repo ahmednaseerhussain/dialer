@@ -171,6 +171,15 @@ export default function ContactDetailScreen() {
             <Text style={styles.callButtonText}>Call</Text>
           </TouchableOpacity>
         )}
+        {!isNew && phone && (
+          <TouchableOpacity
+            style={styles.messageButton}
+            onPress={() => navigation.navigate('Chat', { number: phone.trim(), name: name || null })}
+          >
+            <Ionicons name="chatbubble" size={18} color="#fff" />
+            <Text style={styles.callButtonText}>SMS</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Call History for this contact */}
@@ -279,7 +288,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     borderRadius: 12,
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  messageButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     flexDirection: 'row',
     gap: 6,

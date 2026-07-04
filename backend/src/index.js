@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const migrate = require('./migrate');
+const sql = require('./db');
 
 const authRoutes = require('./routes/auth');
 const tokenRoutes = require('./routes/token');
@@ -10,6 +11,7 @@ const callRoutes = require('./routes/calls');
 const contactRoutes = require('./routes/contacts');
 const adminRoutes = require('./routes/admin');
 const locationRoutes = require('./routes/location');
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 
@@ -34,9 +36,19 @@ app.use('/api/calls', callRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/messages', messageRoutes);
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// Health check — also touches the DB so keep-alive pings keep Neon warm
+// (a suspended DB adds seconds to the inbound-call webhook = late ringing)
+app.get('/health', async (req, res) => {
+  let db = 'ok';
+  try {
+    await sql`SELECT 1`;
+  } catch {
+    db = 'error';
+  }
+  res.json({ status: 'ok', db });
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -54,12 +66,24 @@ function startKeepAlive() {
   }, 14 * 60 * 1000);
 }
 
+// Neon free tier suspends compute after ~5 min idle; the first query after
+// that takes seconds — which delays the inbound-call TwiML and makes phones
+// ring late. Ping the DB every 4 min to keep it awake. Set DB_KEEPALIVE=false
+// to save Neon compute hours if late first rings are acceptable.
+function startDbKeepAlive() {
+  if (process.env.DB_KEEPALIVE === 'false') return;
+  setInterval(() => {
+    sql`SELECT 1`.catch((err) => console.warn('DB keep-alive failed:', err.message));
+  }, 4 * 60 * 1000);
+}
+
 async function start() {
   try {
     await migrate();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       startKeepAlive();
+      startDbKeepAlive();
     });
   } catch (err) {
     console.error('Failed to start server:', err);

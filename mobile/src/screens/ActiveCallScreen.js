@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
+import api from '../services/api';
 
 const DTMF_KEYS = [
   ['1', '2', '3'],
@@ -31,8 +32,15 @@ export default function ActiveCallScreen() {
   }
 
   async function handleHangup() {
+    // Capture the SID before disconnecting — it's gone after reset
+    const callSid = activeCall?.getSid?.();
     if (activeCall) {
       await hangup(activeCall);
+    }
+    // Notes were previously typed and silently thrown away — persist them
+    if (notes.trim()) {
+      api.patch('/api/calls/notes', { callSid, notes: notes.trim() })
+        .catch((err) => console.warn('Saving call notes failed:', err?.message));
     }
     navigation.goBack();
   }

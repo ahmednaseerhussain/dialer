@@ -54,6 +54,23 @@ async function migrate() {
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMP`;
   console.log('  ✓ users location columns');
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      agent_id INT REFERENCES users(id),
+      message_sid VARCHAR(50) UNIQUE,
+      direction VARCHAR(10) NOT NULL,
+      from_number VARCHAR(20) NOT NULL,
+      to_number VARCHAR(20) NOT NULL,
+      body TEXT NOT NULL,
+      status VARCHAR(20) DEFAULT 'received',
+      is_read BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_messages_agent_created ON messages (agent_id, created_at DESC)`;
+  console.log('  ✓ messages table');
+
   console.log('Migrations complete.');
 }
 

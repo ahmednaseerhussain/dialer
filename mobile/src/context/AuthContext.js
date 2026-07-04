@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { Alert, Linking } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
-import api from '../services/api';
+import api, { setOnAuthExpired } from '../services/api';
+import { unregisterVoice } from '../services/voice';
 
 const AuthContext = createContext(null);
 
@@ -14,6 +15,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     loadStoredAuth();
+    // Session expired mid-use (JWT lasts 8h) — drop to the login screen
+    // instead of leaving a signed-in UI whose requests all fail.
+    setOnAuthExpired(() => {
+      stopLocationTracking();
+      setToken(null);
+      setUser(null);
+    });
+    return () => setOnAuthExpired(null);
   }, []);
 
   async function startLocationTracking() {
@@ -102,6 +111,14 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     stopLocationTracking();
+    // Unregister from Twilio push BEFORE clearing the auth token — the
+    // unregister call needs /api/token, which 401s once the token is gone,
+    // leaving a stale binding that keeps ringing this device after logout.
+    try {
+      await unregisterVoice();
+    } catch (err) {
+      console.warn('Voice unregister on logout failed:', err?.message || err);
+    }
     await SecureStore.deleteItemAsync('authToken');
     setToken(null);
     setUser(null);

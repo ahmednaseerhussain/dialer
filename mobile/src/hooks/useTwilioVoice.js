@@ -1,7 +1,25 @@
 import { useCallback } from 'react';
 import { useCall } from '../context/CallContext';
 import api from '../services/api';
-import { getVoice, isVoiceAvailable, InCallManager } from '../services/voice';
+import {
+  getVoice, isVoiceAvailable, registerVoice, unregisterVoice, setSpeakerphoneOn,
+} from '../services/voice';
+
+// A call can reach the app twice (JS accept() resolving AND the invite's
+// 'accepted' event), and the SDK constructs a DIFFERENT JS Call object for
+// each — both wrapping the same native call uuid and both receiving its
+// events. Dedupe by native uuid so listeners attach exactly once, otherwise
+// the duration timer runs double-speed and handlers fire twice.
+const wiredCallIds = new Set();
+
+function callId(call) {
+  return call?._uuid ?? call?.getSid?.() ?? null;
+}
+
+function isWired(call) {
+  const id = callId(call);
+  return id != null && wiredCallIds.has(id);
+}
 
 // Pure action hook. NO listener wiring here — that lives in VoiceBootstrap.
 // All callers share the same singleton Voice instance.
@@ -13,55 +31,58 @@ export default function useTwilioVoice() {
   } = useCall();
 
   const wireCallEvents = useCallback((call) => {
+    if (!call || isWired(call)) return;
+    const id = callId(call);
+    if (id != null) wiredCallIds.add(id);
+
     call.on('connected', () => {
       setCallState('connected');
       startTimer();
-      if (InCallManager) InCallManager.start({ media: 'audio' });
     });
     call.on('reconnecting', () => setCallState('reconnecting'));
     call.on('reconnected', () => setCallState('connected'));
     call.on('disconnected', () => {
+      if (id != null) wiredCallIds.delete(id);
       setCallState('disconnected');
       stopTimer();
-      if (InCallManager) {
-        InCallManager.setForceSpeakerphoneOn(false);
-        InCallManager.stop();
-      }
+      setSpeakerphoneOn(false).catch(() => {});
       setTimeout(() => resetCall(), 2000);
     });
     call.on('connectFailure', (error) => {
       console.error('Call connect failure:', error);
-      if (InCallManager) InCallManager.stop();
+      if (id != null) wiredCallIds.delete(id);
+      setSpeakerphoneOn(false).catch(() => {});
       resetCall();
     });
   }, [setCallState, startTimer, stopTimer, resetCall]);
 
-  const register = useCallback(async () => {
-    const voice = getVoice();
-    if (!voice) {
-      console.warn('Twilio Voice SDK not available, skipping registration');
-      return null;
+  // Take ownership of a call regardless of where it came from (dialed here,
+  // accepted in-app, or accepted from the native notification while the app
+  // was in background). Safe to call more than once for the same call.
+  const adoptCall = useCallback((call, info) => {
+    if (!call) return;
+    if (info) setCallInfo(info);
+    setIncomingInvite(null);
+    if (!isWired(call)) {
+      setActiveCall(call);
+      setCallState('connecting');
+      wireCallEvents(call);
+      // Background-accepted calls may already be live by the time JS wakes
+      // up — the 'connected' event already fired, so sync state manually.
+      const state = call.getState?.();
+      if (state === 'connected') {
+        setCallState('connected');
+        startTimer();
+      } else if (state === 'disconnected') {
+        setCallState('disconnected');
+        setTimeout(() => resetCall(), 2000);
+      }
     }
-    try {
-      const { data } = await api.get('/api/token');
-      await voice.register(data.token);
-      return data.token;
-    } catch (err) {
-      console.warn('Voice registration failed:', err?.response?.data || err?.message || err);
-      return null;
-    }
-  }, []);
+  }, [setActiveCall, setCallState, setCallInfo, setIncomingInvite, wireCallEvents, startTimer, resetCall]);
 
-  const unregister = useCallback(async () => {
-    const voice = getVoice();
-    if (!voice) return;
-    try {
-      const { data } = await api.get('/api/token');
-      await voice.unregister(data.token);
-    } catch (err) {
-      console.warn('Voice unregister failed:', err?.message || err);
-    }
-  }, []);
+  const register = useCallback(() => registerVoice({ force: true }), []);
+
+  const unregister = useCallback(() => unregisterVoice(), []);
 
   const makeCall = useCallback(async (toNumber) => {
     const voice = getVoice();
@@ -78,15 +99,14 @@ export default function useTwilioVoice() {
         params: { To: toNumber },
       });
 
-      setActiveCall(call);
-      wireCallEvents(call);
+      adoptCall(call);
       return call;
     } catch (err) {
       console.error('Make call error:', err);
       resetCall();
       throw err;
     }
-  }, [setActiveCall, setCallState, setCallInfo, resetCall, wireCallEvents]);
+  }, [setCallState, setCallInfo, resetCall, adoptCall]);
 
   const acceptIncoming = useCallback(async (callInvite) => {
     try {
@@ -95,23 +115,22 @@ export default function useTwilioVoice() {
       setCallInfo({ number: from, direction: 'inbound' });
 
       const call = await callInvite.accept();
-      setActiveCall(call);
-      setIncomingInvite(null);
-      wireCallEvents(call);
+      adoptCall(call);
       return call;
     } catch (err) {
       console.error('Accept call error:', err);
       resetCall();
       throw err;
     }
-  }, [setActiveCall, setCallState, setCallInfo, setIncomingInvite, resetCall, wireCallEvents]);
+  }, [setCallState, setCallInfo, resetCall, adoptCall]);
 
   const rejectIncoming = useCallback(async (callInvite) => {
     try {
       await callInvite.reject();
-      setIncomingInvite(null);
     } catch (err) {
       console.error('Reject call error:', err);
+    } finally {
+      setIncomingInvite(null);
     }
   }, [setIncomingInvite]);
 
@@ -150,11 +169,9 @@ export default function useTwilioVoice() {
     }
   }, []);
 
-  const toggleSpeaker = useCallback((speakerOn) => {
-    if (InCallManager) {
-      InCallManager.setForceSpeakerphoneOn(!speakerOn);
-    }
-    setIsSpeaker(!speakerOn);
+  const toggleSpeaker = useCallback(async (speakerOn) => {
+    const ok = await setSpeakerphoneOn(!speakerOn);
+    if (ok) setIsSpeaker(!speakerOn);
   }, [setIsSpeaker]);
 
   return {
@@ -169,6 +186,7 @@ export default function useTwilioVoice() {
     sendDigits,
     toggleSpeaker,
     wireCallEvents,
+    adoptCall,
     isAvailable: isVoiceAvailable(),
   };
 }

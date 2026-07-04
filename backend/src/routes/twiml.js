@@ -13,6 +13,25 @@ function publicBaseUrl(req) {
   return `${proto}://${req.get('host')}`;
 }
 
+// Twilio's <Dial> action gives DialCallStatus values that differ slightly
+// from call status values — normalize to what the app displays/filters on.
+function normalizeDialStatus(dialCallStatus) {
+  switch (dialCallStatus) {
+    case 'answered':
+    case 'completed':
+      return 'completed';
+    case 'no-answer':
+      return 'no-answer';
+    case 'busy':
+      return 'busy';
+    case 'canceled':
+      return 'canceled';
+    case 'failed':
+    default:
+      return 'failed';
+  }
+}
+
 // Outbound call — TwiML App Voice URL
 router.post('/voice', twilioWebhookMiddleware, async (req, res) => {
   try {
@@ -62,29 +81,33 @@ router.post('/voice', twilioWebhookMiddleware, async (req, res) => {
       const dial = twiml.dial({
         callerId,
         record: 'record-from-ringing',
-        recordingStatusCallback: `${base}/api/twiml/status`,
+        recordingStatusCallback: `${base}/api/twiml/recording`,
         recordingStatusCallbackMethod: 'POST',
-        action: `${base}/api/twiml/status`,
+        action: `${base}/api/twiml/dial-complete`,
         method: 'POST',
         answerOnBridge: true,
         timeout: 30,
       });
       dial.number(to);
 
-      // Log the outbound call
+      // Respond first so the callee's phone starts ringing ASAP,
+      // then log the call without blocking the webhook.
+      res.type('text/xml').send(twiml.toString());
+
       if (identity) {
-        await sql`
+        sql`
           INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
           SELECT u.id, ${req.body.CallSid}, 'outbound', ${callerId}, ${to}, 'initiated'
           FROM users u WHERE u.username = ${identity}
           ON CONFLICT (call_sid) DO NOTHING
-        `;
+        `.catch((err) => console.error('[twiml /voice] call log insert failed:', err));
       }
-    } else {
-      // Client-to-client call
-      const dial = twiml.dial();
-      dial.client(to);
+      return;
     }
+
+    // Client-to-client call
+    const dial = twiml.dial();
+    dial.client(to);
 
     const xml = twiml.toString();
     console.log('[twiml /voice] response:', xml);
@@ -114,7 +137,7 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
     const dial = twiml.dial({
       timeout: 25,
       answerOnBridge: true,
-      action: `${base}/api/twiml/status`,
+      action: `${base}/api/twiml/dial-complete`,
       method: 'POST',
     });
     // Ring all agents assigned to this number (handles multiple agents sharing a number)
@@ -122,17 +145,17 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
       dial.client(agent.username);
     }
 
-    // Log the inbound call under the first matching agent
+    // Respond immediately — Twilio only sends the incoming-call push to the
+    // device after it gets this TwiML, so every ms here delays the ring.
+    res.type('text/xml').send(twiml.toString());
+
+    // Log the inbound call under the first matching agent (non-blocking)
     const agent = rows[0];
-    await sql`
+    sql`
       INSERT INTO call_logs (agent_id, call_sid, direction, from_number, to_number, status)
       VALUES (${agent.id}, ${req.body.CallSid}, 'inbound', ${req.body.From}, ${inboundNumber}, 'ringing')
-    `;
-
-    // After dial completes (no answer / busy), say goodbye
-    twiml.say('The agent is unavailable right now. Please try again later.');
-
-    res.type('text/xml').send(twiml.toString());
+      ON CONFLICT (call_sid) DO NOTHING
+    `.catch((err) => console.error('[twiml /inbound] call log insert failed:', err));
   } catch (err) {
     console.error('TwiML inbound error:', err);
     const twiml = new VoiceResponse();
@@ -141,25 +164,94 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
   }
 });
 
-// Status callback — update call logs
-router.post('/status', twilioWebhookMiddleware, async (req, res) => {
+// <Dial> action callback — fires when the dial attempt finishes.
+// Carries DialCallStatus/DialCallDuration (NOT CallStatus/CallDuration) and
+// MUST return TwiML: whatever we return continues the parent call.
+router.post('/dial-complete', twilioWebhookMiddleware, async (req, res) => {
+  const twiml = new VoiceResponse();
   try {
-    const { CallSid, CallStatus, CallDuration, RecordingUrl } = req.body;
+    const { CallSid, DialCallStatus, DialCallDuration, From } = req.body;
+    const status = normalizeDialStatus(DialCallStatus);
+    const duration = DialCallDuration ? parseInt(DialCallDuration, 10) : null;
+
+    console.log('[twiml /dial-complete] CallSid=%s DialCallStatus=%s duration=%s',
+      CallSid, DialCallStatus, DialCallDuration);
 
     if (CallSid) {
       await sql`
         UPDATE call_logs SET
-          status = ${CallStatus || 'unknown'},
-          duration_sec = ${CallDuration ? parseInt(CallDuration, 10) : null},
-          recording_url = ${RecordingUrl || null}
+          status = ${status},
+          duration_sec = COALESCE(${duration}, duration_sec)
         WHERE call_sid = ${CallSid}
       `;
     }
 
+    // If nobody answered, tell the caller. From starts with "client:" for
+    // outbound calls placed by an agent; otherwise it's an inbound PSTN caller.
+    if (['no-answer', 'busy', 'failed'].includes(status)) {
+      const isAgentCaller = (From || '').startsWith('client:');
+      twiml.say(
+        isAgentCaller
+          ? 'The call could not be completed.'
+          : 'The agent is unavailable right now. Please try again later.'
+      );
+    }
+    twiml.hangup();
+    res.type('text/xml').send(twiml.toString());
+  } catch (err) {
+    console.error('Dial-complete callback error:', err);
+    twiml.hangup();
+    res.type('text/xml').send(twiml.toString());
+  }
+});
+
+// Recording status callback — only touches the recording URL.
+// (Previously this hit /status and wiped status/duration to unknown/null.)
+router.post('/recording', twilioWebhookMiddleware, async (req, res) => {
+  try {
+    const { CallSid, RecordingUrl, RecordingStatus } = req.body;
+    if (CallSid && RecordingUrl && (!RecordingStatus || RecordingStatus === 'completed')) {
+      await sql`
+        UPDATE call_logs SET recording_url = ${RecordingUrl}
+        WHERE call_sid = ${CallSid}
+      `;
+    }
     res.sendStatus(200);
   } catch (err) {
-    console.error('Status callback error:', err);
+    console.error('Recording callback error:', err);
     res.sendStatus(200);
+  }
+});
+
+// Generic status callback — kept for backward compatibility with any TwiML
+// still in flight. Only updates fields actually present in the request so a
+// recording-only or partial callback can never null out good data.
+router.post('/status', twilioWebhookMiddleware, async (req, res) => {
+  try {
+    const { CallSid, CallStatus, CallDuration, RecordingUrl, DialCallStatus, DialCallDuration } = req.body;
+
+    const status = DialCallStatus ? normalizeDialStatus(DialCallStatus) : (CallStatus || null);
+    const rawDuration = DialCallDuration || CallDuration;
+    const duration = rawDuration ? parseInt(rawDuration, 10) : null;
+
+    if (CallSid) {
+      await sql`
+        UPDATE call_logs SET
+          status = COALESCE(${status}, status),
+          duration_sec = COALESCE(${duration}, duration_sec),
+          recording_url = COALESCE(${RecordingUrl || null}, recording_url)
+        WHERE call_sid = ${CallSid}
+      `;
+    }
+
+    // Valid empty TwiML — this endpoint may be hit as a <Dial> action by
+    // in-flight calls, and Twilio errors on non-XML action responses.
+    const twiml = new VoiceResponse();
+    res.type('text/xml').send(twiml.toString());
+  } catch (err) {
+    console.error('Status callback error:', err);
+    const twiml = new VoiceResponse();
+    res.type('text/xml').send(twiml.toString());
   }
 });
 

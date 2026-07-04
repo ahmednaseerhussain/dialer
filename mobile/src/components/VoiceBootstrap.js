@@ -1,17 +1,37 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
-import { setVoiceHandlers, isVoiceAvailable } from '../services/voice';
+import { setVoiceHandlers, isVoiceAvailable, registerVoice } from '../services/voice';
+
+async function requestNotificationPermission() {
+  if (Platform.OS !== 'android') return true;
+  if (Platform.Version < 33) return true; // Android < 13: granted at install
+  try {
+    const perm = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+    if (!perm) return true;
+    const has = await PermissionsAndroid.check(perm);
+    if (has) return true;
+    const result = await PermissionsAndroid.request(perm, {
+      title: 'Notifications',
+      message: 'Allow notifications so you can be alerted to incoming calls.',
+      buttonPositive: 'Allow',
+    });
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (e) {
+    console.warn('POST_NOTIFICATIONS request failed:', e?.message || e);
+    return false;
+  }
+}
 
 // Wires the singleton Voice listeners to React state, registers the device
 // for incoming push notifications on login, and surfaces background-accepted
 // invites (when user accepts from the native notification UI) into the app.
 export default function VoiceBootstrap({ navigationRef }) {
   const { user } = useAuth();
-  const { setIncomingInvite, setActiveCall, setCallState, setCallInfo } = useCall();
-  const { register, unregister, wireCallEvents } = useTwilioVoice();
-  const registeredFor = useRef(null);
+  const { setIncomingInvite } = useCall();
+  const { adoptCall } = useTwilioVoice();
 
   // Wire singleton handlers once
   useEffect(() => {
@@ -19,53 +39,64 @@ export default function VoiceBootstrap({ navigationRef }) {
       console.warn('[voice] @twilio/voice-react-native-sdk not available');
       return;
     }
+    const goToIncoming = () => {
+      if (navigationRef?.isReady?.()) {
+        const route = navigationRef.getCurrentRoute?.();
+        if (route?.name !== 'IncomingCall') {
+          navigationRef.navigate('IncomingCall');
+        }
+      }
+    };
     setVoiceHandlers({
       onCallInvite: (invite) => {
         setIncomingInvite(invite);
-        // Navigate to incoming UI if app is foreground and not already there
-        if (navigationRef?.isReady?.()) {
-          const route = navigationRef.getCurrentRoute?.();
-          if (route?.name !== 'IncomingCall') {
-            navigationRef.navigate('IncomingCall');
-          }
-        }
+        goToIncoming();
       },
       onCancelledCallInvite: () => {
+        // Caller hung up before we answered — stop the ringing UI
         setIncomingInvite(null);
-      },
-      onCallInviteAccepted: (invite, call) => {
-        // User accepted via native notification UI while app was in background
-        const from = invite?.getFrom?.() || invite?.from;
-        setCallInfo({ number: from, direction: 'inbound' });
-        setCallState('connecting');
-        setIncomingInvite(null);
-        if (call) {
-          setActiveCall(call);
-          wireCallEvents(call);
-        }
-        if (navigationRef?.isReady?.()) {
-          navigationRef.navigate('ActiveCall');
-        }
       },
       onCallInviteRejected: () => {
         setIncomingInvite(null);
       },
+      // Fires for ANY accept — in-app button or the native notification UI
+      // while the app was in background. adoptCall is idempotent, so the
+      // in-app path (which already adopted) is unaffected.
+      onCallInviteAccepted: (invite, call) => {
+        const from = invite?.getFrom?.() || invite?.from;
+        adoptCall(call, { number: from, direction: 'inbound' });
+        if (navigationRef?.isReady?.()) {
+          const route = navigationRef.getCurrentRoute?.();
+          if (route?.name !== 'ActiveCall') {
+            navigationRef.navigate('ActiveCall');
+          }
+        }
+      },
+      // User tapped the incoming-call notification body — show the app UI
+      onCallInviteNotificationTapped: () => {
+        goToIncoming();
+      },
     });
-  }, [navigationRef, setIncomingInvite, setActiveCall, setCallState, setCallInfo, wireCallEvents]);
+  }, [navigationRef, setIncomingInvite, adoptCall]);
 
-  // Register/unregister on login state changes
+  // Register on login and re-register whenever the app returns to the
+  // foreground (throttled inside registerVoice). Keeps this device's push
+  // binding fresh even when the same account is signed in elsewhere.
   useEffect(() => {
-    if (!isVoiceAvailable()) return;
-    if (user && registeredFor.current !== user.username) {
-      register().then((tok) => {
-        if (tok) registeredFor.current = user.username;
-      });
-    }
-    if (!user && registeredFor.current) {
-      unregister();
-      registeredFor.current = null;
-    }
-  }, [user, register, unregister]);
+    if (!isVoiceAvailable() || !user) return;
+
+    (async () => {
+      await requestNotificationPermission();
+      await registerVoice({ force: true });
+    })();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        registerVoice().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [user]);
 
   return null;
 }

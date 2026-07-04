@@ -2,6 +2,8 @@
 // Avoids the multiple-`new Voice()` problem and ensures listeners
 // are attached exactly once for the entire app lifetime.
 
+import api from './api';
+
 let Voice = null;
 try {
   // eslint-disable-next-line global-require
@@ -21,6 +23,11 @@ try {
 let voiceInstance = null;
 let listenersAttached = false;
 
+// Registration lifecycle state
+let wantRegistered = false;
+let lastRegisterAt = 0;
+let registerInFlight = null;
+
 // Handlers wired by the React layer (CallProvider/VoiceBootstrap).
 // Using a single object so the latest-mounted bootstrap can replace them.
 const handlers = {
@@ -28,10 +35,36 @@ const handlers = {
   onCallInviteAccepted: null,
   onCallInviteRejected: null,
   onCancelledCallInvite: null,
+  onCallInviteNotificationTapped: null,
   onRegistered: null,
-  onRegistrationFailed: null,
   onError: null,
 };
+
+// SDK v1.x: accepted/rejected/cancelled/notificationTapped are events on the
+// CallInvite instance, NOT on Voice. (The old Voice-level names like
+// 'callInviteAccepted' never fire on this SDK version.)
+function wireInvite(invite) {
+  try {
+    invite.on('accepted', (call) => {
+      console.log('[voice] invite accepted');
+      handlers.onCallInviteAccepted && handlers.onCallInviteAccepted(invite, call);
+    });
+    invite.on('rejected', () => {
+      console.log('[voice] invite rejected');
+      handlers.onCallInviteRejected && handlers.onCallInviteRejected(invite);
+    });
+    invite.on('cancelled', (err) => {
+      console.log('[voice] invite cancelled', err?.message || '');
+      handlers.onCancelledCallInvite && handlers.onCancelledCallInvite(invite, err);
+    });
+    invite.on('notificationTapped', () => {
+      console.log('[voice] invite notification tapped');
+      handlers.onCallInviteNotificationTapped && handlers.onCallInviteNotificationTapped(invite);
+    });
+  } catch (e) {
+    console.warn('[voice] failed to wire invite events:', e?.message || e);
+  }
+}
 
 function getVoice() {
   if (!Voice) return null;
@@ -39,31 +72,24 @@ function getVoice() {
     voiceInstance = new Voice();
   }
   if (!listenersAttached) {
-    // Use string event names — they're stable across SDK versions
     voiceInstance.on('callInvite', (invite) => {
       console.log('[voice] callInvite from', invite?.getFrom?.() || invite?.from);
+      wireInvite(invite);
       handlers.onCallInvite && handlers.onCallInvite(invite);
-    });
-    voiceInstance.on('callInviteAccepted', (invite, call) => {
-      // Fired when user accepts via the native push notification UI
-      console.log('[voice] callInviteAccepted');
-      handlers.onCallInviteAccepted && handlers.onCallInviteAccepted(invite, call);
-    });
-    voiceInstance.on('callInviteRejected', (invite) => {
-      console.log('[voice] callInviteRejected');
-      handlers.onCallInviteRejected && handlers.onCallInviteRejected(invite);
-    });
-    voiceInstance.on('cancelledCallInvite', (invite) => {
-      console.log('[voice] cancelledCallInvite');
-      handlers.onCancelledCallInvite && handlers.onCancelledCallInvite(invite);
     });
     voiceInstance.on('registered', () => {
       console.log('[voice] device registered for incoming calls');
       handlers.onRegistered && handlers.onRegistered();
     });
-    voiceInstance.on('registrationFailed', (err) => {
-      console.warn('[voice] registrationFailed:', err?.message || err);
-      handlers.onRegistrationFailed && handlers.onRegistrationFailed(err);
+    voiceInstance.on('unregistered', () => {
+      console.log('[voice] device unregistered');
+      // If we didn't ask for this (token expiry, push token rotation), get
+      // back online — otherwise this device silently stops receiving calls.
+      if (wantRegistered) {
+        setTimeout(() => {
+          registerVoice({ force: true }).catch(() => {});
+        }, 5000);
+      }
     });
     voiceInstance.on('error', (err) => {
       console.warn('[voice] error:', err?.message || err);
@@ -80,6 +106,93 @@ export function setVoiceHandlers(next) {
 
 export function isVoiceAvailable() {
   return !!Voice;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Register this device for incoming calls. Retries because the backend
+// (Render free tier) can cold-start slower than one request timeout —
+// a single silent failure here means this phone never rings.
+export async function registerVoice({ force = false } = {}) {
+  const voice = getVoice();
+  if (!voice) {
+    console.warn('[voice] SDK not available, skipping registration');
+    return false;
+  }
+  if (registerInFlight) return registerInFlight;
+  if (!force && Date.now() - lastRegisterAt < 60 * 1000) return true;
+
+  registerInFlight = (async () => {
+    const delays = [0, 3000, 8000];
+    for (let attempt = 0; attempt < delays.length; attempt += 1) {
+      if (delays[attempt]) await sleep(delays[attempt]);
+      try {
+        const { data } = await api.get('/api/token');
+        await voice.register(data.token);
+        wantRegistered = true;
+        lastRegisterAt = Date.now();
+        return true;
+      } catch (err) {
+        console.warn(
+          `[voice] registration attempt ${attempt + 1} failed:`,
+          err?.response?.data?.error || err?.message || err
+        );
+      }
+    }
+    return false;
+  })();
+
+  try {
+    return await registerInFlight;
+  } finally {
+    registerInFlight = null;
+  }
+}
+
+// Must be called BEFORE the auth token is cleared on logout, otherwise the
+// /api/token call 401s and the stale push binding keeps ringing this device.
+export async function unregisterVoice() {
+  wantRegistered = false;
+  lastRegisterAt = 0;
+  const voice = getVoice();
+  if (!voice) return;
+  try {
+    const { data } = await api.get('/api/token');
+    await voice.unregister(data.token);
+  } catch (err) {
+    console.warn('[voice] unregister failed:', err?.message || err);
+  }
+}
+
+// Route call audio via the SDK's own audio-device API (AudioSwitch on
+// Android). Mixing InCallManager with the SDK fights AudioSwitch and makes
+// the speakerphone work only sometimes — InCallManager is a fallback only.
+export async function setSpeakerphoneOn(on) {
+  const voice = getVoice();
+  if (voice?.getAudioDevices) {
+    try {
+      const { audioDevices } = await voice.getAudioDevices();
+      const wantType = on ? 'speaker' : 'earpiece';
+      const device = (audioDevices || []).find(
+        (d) => String(d?.type).toLowerCase() === wantType
+      );
+      if (device) {
+        await device.select();
+        return true;
+      }
+    } catch (err) {
+      console.warn('[voice] audio device select failed:', err?.message || err);
+    }
+  }
+  if (InCallManager) {
+    try {
+      InCallManager.setForceSpeakerphoneOn(on);
+      return true;
+    } catch (err) {
+      console.warn('[voice] InCallManager speaker fallback failed:', err?.message || err);
+    }
+  }
+  return false;
 }
 
 export { getVoice, InCallManager };

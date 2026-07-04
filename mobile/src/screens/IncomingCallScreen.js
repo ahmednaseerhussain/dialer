@@ -5,29 +5,81 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 
+let InCallManager = null;
+try {
+  InCallManager = require('react-native-incall-manager').default;
+} catch {
+  InCallManager = null;
+}
+
+function getInviteFrom(invite) {
+  if (!invite) return null;
+  // SDK exposes getter methods; fall back to legacy props
+  return invite.getFrom?.() ?? invite.from ?? invite._from ?? null;
+}
+
 export default function IncomingCallScreen() {
   const navigation = useNavigation();
   const { incomingInvite } = useCall();
   const { acceptIncoming, rejectIncoming } = useTwilioVoice();
+  const busyRef = React.useRef(false);
 
   React.useEffect(() => {
-    Vibration.vibrate([0, 500, 200, 500], true);
-    return () => Vibration.cancel();
+    // Vibrate + play ringtone while the screen is visible
+    Vibration.vibrate([0, 1000, 1000], true);
+    if (InCallManager) {
+      try {
+        InCallManager.startRingtone('_BUNDLE_');
+      } catch (e) {
+        console.warn('startRingtone failed:', e?.message || e);
+      }
+    }
+    return () => {
+      Vibration.cancel();
+      if (InCallManager) {
+        try { InCallManager.stopRingtone(); } catch {}
+      }
+    };
   }, []);
 
+  // If the invite gets cancelled (caller hangs up) or accepted via the
+  // native notification while we're still here, leave the screen.
+  React.useEffect(() => {
+    if (!incomingInvite) {
+      navigation.canGoBack() && navigation.goBack();
+    }
+  }, [incomingInvite, navigation]);
+
   async function handleAccept() {
-    if (incomingInvite) {
+    if (!incomingInvite || busyRef.current) return;
+    busyRef.current = true;
+    Vibration.cancel();
+    if (InCallManager) { try { InCallManager.stopRingtone(); } catch {} }
+    try {
       await acceptIncoming(incomingInvite);
       navigation.replace('ActiveCall');
+    } catch (err) {
+      console.error('Accept failed:', err);
+      busyRef.current = false;
+      navigation.canGoBack() && navigation.goBack();
     }
   }
 
   async function handleReject() {
-    if (incomingInvite) {
+    if (busyRef.current) return;
+    if (!incomingInvite) {
+      navigation.canGoBack() && navigation.goBack();
+      return;
+    }
+    busyRef.current = true;
+    try {
       await rejectIncoming(incomingInvite);
-      navigation.goBack();
+    } finally {
+      navigation.canGoBack() && navigation.goBack();
     }
   }
+
+  const fromDisplay = getInviteFrom(incomingInvite) || 'Unknown Caller';
 
   return (
     <View style={styles.container}>
@@ -38,9 +90,7 @@ export default function IncomingCallScreen() {
           </View>
         </View>
         <Text style={styles.label}>Incoming Call</Text>
-        <Text style={styles.callerNumber}>
-          {incomingInvite?.from || 'Unknown Caller'}
-        </Text>
+        <Text style={styles.callerNumber}>{fromDisplay}</Text>
       </View>
 
       <View style={styles.actions}>

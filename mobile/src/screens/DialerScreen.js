@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert,
-  PermissionsAndroid, Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCall } from '../context/CallContext';
 import { useAuth } from '../context/AuthContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 import api from '../services/api';
+import { ensureMicPermission } from '../utils/permissions';
 
 const KEYPAD = [
   [{ digit: '1', sub: '' }, { digit: '2', sub: 'ABC' }, { digit: '3', sub: 'DEF' }],
@@ -25,34 +25,23 @@ export default function DialerScreen() {
   const [number, setNumber] = useState('');
   const [recentCalls, setRecentCalls] = useState([]);
 
-  useEffect(() => {
-    loadRecentCalls();
-  }, []);
-
-  async function ensureMicPermission() {
-    if (Platform.OS !== 'android') return true;
-    const check = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
-    if (check) return true;
-    const granted = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      {
-        title: 'Microphone Permission',
-        message: 'Kraydl Dialer needs microphone access to make calls.',
-        buttonPositive: 'Allow',
-      }
-    );
-    return granted === PermissionsAndroid.RESULTS.GRANTED;
-  }
+  // Refresh recents on every focus — the tab stays mounted, so a
+  // mount-only load would show stale data after each call.
+  useFocusEffect(
+    useCallback(() => {
+      loadRecentCalls();
+    }, [])
+  );
 
   // Navigate to incoming call screen when invite arrives
-  useEffect(() => {
+  React.useEffect(() => {
     if (incomingInvite) {
       navigation.navigate('IncomingCall');
     }
   }, [incomingInvite]);
 
   // Navigate to active call screen when call connects
-  useEffect(() => {
+  React.useEffect(() => {
     if (callState === 'connecting' || callState === 'connected') {
       navigation.navigate('ActiveCall');
     }
