@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCall } from '../context/CallContext';
 import useTwilioVoice from '../hooks/useTwilioVoice';
 import { setVoiceHandlers, isVoiceAvailable, registerVoice } from '../services/voice';
+import { syncDeviceToken } from '../services/pushToken';
 
 async function requestNotificationPermission() {
   if (Platform.OS !== 'android') return true;
@@ -83,16 +84,18 @@ export default function VoiceBootstrap({ navigationRef }) {
   // foreground (throttled inside registerVoice). Keeps this device's push
   // binding fresh even when the same account is signed in elsewhere.
   useEffect(() => {
-    if (!isVoiceAvailable() || !user) return;
+    if (!user) return;
 
     (async () => {
       await requestNotificationPermission();
-      await registerVoice({ force: true });
+      if (isVoiceAvailable()) await registerVoice({ force: true });
+      await syncDeviceToken({ force: true }); // SMS push for this device
     })();
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        registerVoice().catch(() => {});
+        if (isVoiceAvailable()) registerVoice().catch(() => {});
+        syncDeviceToken().catch(() => {});
       }
     });
     return () => sub.remove();

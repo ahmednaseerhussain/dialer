@@ -12,6 +12,7 @@ const contactRoutes = require('./routes/contacts');
 const adminRoutes = require('./routes/admin');
 const locationRoutes = require('./routes/location');
 const messageRoutes = require('./routes/messages');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check — also touches the DB so keep-alive pings keep Neon warm
 // (a suspended DB adds seconds to the inbound-call webhook = late ringing)

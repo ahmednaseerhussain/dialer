@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import api, { setOnAuthExpired } from '../services/api';
 import { unregisterVoice } from '../services/voice';
+import { removeDeviceToken } from '../services/pushToken';
 
 const AuthContext = createContext(null);
 
@@ -118,6 +119,11 @@ export function AuthProvider({ children }) {
       await unregisterVoice();
     } catch (err) {
       console.warn('Voice unregister on logout failed:', err?.message || err);
+    }
+    try {
+      await removeDeviceToken();
+    } catch (err) {
+      console.warn('Device token removal on logout failed:', err?.message || err);
     }
     await SecureStore.deleteItemAsync('authToken');
     setToken(null);

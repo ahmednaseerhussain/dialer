@@ -71,6 +71,17 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_messages_agent_created ON messages (agent_id, created_at DESC)`;
   console.log('  ✓ messages table');
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS device_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INT REFERENCES users(id),
+      token TEXT UNIQUE NOT NULL,
+      platform VARCHAR(10) DEFAULT 'android',
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  console.log('  ✓ device_tokens table');
+
   console.log('Migrations complete.');
 }
 

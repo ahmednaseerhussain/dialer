@@ -4,6 +4,7 @@ const { MessagingResponse } = require('twilio').twiml;
 const sql = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { twilioWebhookMiddleware } = require('../middleware/twilioValidation');
+const fcm = require('../services/fcm');
 
 const router = express.Router();
 
@@ -47,11 +48,39 @@ router.post('/inbound/:number', twilioWebhookMiddleware, async (req, res) => {
       return;
     }
 
-    await sql`
+    const inserted = await sql`
       INSERT INTO messages (agent_id, message_sid, direction, from_number, to_number, body, status)
       VALUES (${rows[0].id}, ${MessageSid}, 'inbound', ${From}, ${inboundNumber}, ${Body || ''}, 'received')
       ON CONFLICT (message_sid) DO NOTHING
+      RETURNING id
     `;
+
+    // Push notification to the agent's devices (skip Twilio webhook retries
+    // that hit the ON CONFLICT path — they were already notified).
+    if (inserted.length && fcm.isConfigured()) {
+      try {
+        const tokenRows = await sql`SELECT token FROM device_tokens WHERE user_id = ${rows[0].id}`;
+        if (tokenRows.length) {
+          const contactRows = await sql`
+            SELECT name FROM contacts WHERE phone = ${From} AND name IS NOT NULL AND name <> '' LIMIT 1
+          `;
+          const dead = await fcm.sendToTokens(
+            tokenRows.map((r) => r.token),
+            {
+              type: 'sms',
+              number: From,
+              name: contactRows[0]?.name || '',
+              body: (Body || '').slice(0, 240),
+            }
+          );
+          for (const deadToken of dead) {
+            await sql`DELETE FROM device_tokens WHERE token = ${deadToken}`;
+          }
+        }
+      } catch (pushErr) {
+        console.warn('[messages /inbound] push failed:', pushErr.message);
+      }
+    }
   } catch (err) {
     console.error('Inbound SMS error:', err);
   }
